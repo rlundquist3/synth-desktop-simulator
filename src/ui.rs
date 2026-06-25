@@ -1,14 +1,15 @@
 use crate::oscillator::{Oscillator, Waveform::Sine};
-use crate::utils::{get_freq_for_note, A440};
+use crate::utils::{A440, get_freq_for_note};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::text::Span;
 use ratatui::{
+    DefaultTerminal, Frame,
     buffer::Buffer,
     layout::Rect,
-    style::Stylize,
+    style::{Color, Style, Stylize},
     symbols::border,
     text::{Line, Text},
     widgets::{Block, Paragraph, Widget},
-    DefaultTerminal, Frame,
 };
 use rodio::{MixerDeviceSink, Source};
 use std::{io::Result, time::Duration};
@@ -17,7 +18,8 @@ use std::{io::Result, time::Duration};
 pub struct UI {
     audio_device: MixerDeviceSink,
     oscillator: Oscillator,
-    last_key: String,
+    last_key: char,
+    last_freq: String,
     exit: bool,
 }
 
@@ -26,7 +28,8 @@ impl UI {
         UI {
             audio_device: audio_device,
             oscillator: Oscillator::new(Sine),
-            last_key: String::from("_"),
+            last_key: '_',
+            last_freq: String::from("_"),
             exit: false,
         }
     }
@@ -89,7 +92,11 @@ impl UI {
         };
 
         if freq > 0.0 {
-            self.last_key = format!("{freq}");
+            self.last_key = match key_event.code.as_char() {
+                Some(last_key) => last_key,
+                _ => '_',
+            };
+            self.last_freq = format!("{freq}");
             self.oscillator.set_freq(freq);
             self.audio_device.mixer().add(
                 self.oscillator
@@ -107,27 +114,75 @@ impl UI {
 impl Widget for &UI {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let title = Line::from(" Terminal Synth ".bold());
-        let instructions = Line::from(vec![
-            "click some buttons".into(),
-            " Quit ".into(),
-            "<Ctrl+C> ".red().bold(),
-        ]);
+        let instructions = Line::from(vec![" Quit ".into(), "<Ctrl+C> ".red().bold()]);
         let block = Block::bordered()
             .title(title.centered())
-            .title_bottom(instructions.centered())
+            .title_bottom(instructions.right_aligned())
             .border_set(border::THICK);
 
-        let key_text = Text::from(vec![Line::from(vec![
-            "Freq: ".into(),
-            self.last_key.clone().blue(),
-        ])]);
+        let key_text = Line::from(vec![
+            "Key: ".into(),
+            self.last_key.to_string().green(),
+            " Freq: ".into(),
+            self.last_freq.clone().blue(),
+        ]);
 
-        Paragraph::new(key_text)
-            .centered()
+        let black_keys = vec!['2', '3', '4', ' ', '6', '7', ' ', '9', '0', '-'];
+        let white_keys = vec!['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']'];
+
+        let black_key_render = Line::from(
+            std::iter::once(Span::raw("  "))
+                .chain(black_keys.iter().flat_map(|key| {
+                    [
+                        Span::styled("|", Style::default().fg(Color::White).bg(Color::Black)),
+                        Span::styled(
+                            format!(" {key} "),
+                            Style::default()
+                                .fg(Color::White)
+                                .bg(if *key == self.last_key {
+                                    Color::Blue
+                                } else {
+                                    Color::Black
+                                }),
+                        ),
+                    ]
+                }))
+                .chain(std::iter::once(Span::styled(
+                    "|",
+                    Style::default().fg(Color::White).bg(Color::Black),
+                )))
+                .collect::<Vec<_>>(),
+        );
+
+        let white_key_render = Line::from(
+            white_keys
+                .iter()
+                .flat_map(|key| {
+                    [
+                        Span::styled("|", Style::default().fg(Color::Black).bg(Color::White)),
+                        Span::styled(
+                            format!(" {key} "),
+                            Style::default()
+                                .fg(Color::Black)
+                                .bg(if *key == self.last_key {
+                                    Color::Blue
+                                } else {
+                                    Color::White
+                                }),
+                        ),
+                    ]
+                })
+                .chain(std::iter::once(Span::styled(
+                    "|",
+                    Style::default().fg(Color::Black).bg(Color::White),
+                )))
+                .collect::<Vec<_>>(),
+        );
+
+        let text = Text::from(vec![key_text, black_key_render, white_key_render]);
+        Paragraph::new(text)
+            .left_aligned()
             .block(block)
             .render(area, buf);
     }
 }
-
-//   | 2 | 3 | 4 |   | 6 | 7 |   | 9 | 0 | - |
-// | q | w | e | r | t | y | u | i | o | p | [ | ] |
