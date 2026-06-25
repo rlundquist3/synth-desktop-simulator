@@ -1,6 +1,6 @@
-mod oscillators;
+mod oscillator;
 
-use crate::oscillators::{Oscillator, Waveform::Sine};
+use crate::oscillator::{Oscillator, Waveform::Sine};
 use rodio::{DeviceSinkBuilder, Source};
 use std::time::Duration;
 
