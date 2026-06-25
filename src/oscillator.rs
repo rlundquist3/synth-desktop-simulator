@@ -3,11 +3,13 @@ use std::{f32::consts::PI, num::NonZero, time::Duration};
 
 use crate::SAMPLE_RATE;
 
+#[derive(Clone)]
 pub enum Waveform {
     Sine,
 }
 pub use self::Waveform::*;
 
+#[derive(Clone)]
 pub struct Oscillator {
     waveform: Waveform,
     phase: f32,
