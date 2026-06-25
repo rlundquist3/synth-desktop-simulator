@@ -1,10 +1,10 @@
-mod keyboard_input;
 mod oscillator;
+mod ui;
 mod utils;
 
 use crate::{
-    keyboard_input::KeyboardInput,
     oscillator::{Oscillator, Waveform::Sine},
+    ui::UI,
 };
 use rodio::DeviceSinkBuilder;
 use std::io::Result;
@@ -18,7 +18,12 @@ fn main() -> Result<()> {
 
     let sine = Oscillator::new(Sine);
 
-    let mut keyboard_input = KeyboardInput::new(audio_device);
-    keyboard_input.set_oscillator(sine);
-    keyboard_input.listen()
+    // let mut keyboard_input = UI::new(audio_device);
+    // keyboard_input.set_oscillator(sine);
+    // keyboard_input.listen()
+
+    let mut ui = UI::new(audio_device);
+    ui.set_oscillator(sine);
+
+    ratatui::run(|terminal| ui.run(terminal))
 }
