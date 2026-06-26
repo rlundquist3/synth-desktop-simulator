@@ -1,23 +1,36 @@
 use crate::oscillator::{Oscillator, Waveform::Sine};
 use crate::utils::{A440, get_freq_for_note};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ratatui::text::Span;
+use crossterm::{
+    event::{
+        self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
+        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    },
+    execute,
+};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
     layout::Rect,
     style::{Color, Style, Stylize},
     symbols::border,
-    text::{Line, Text},
+    text::{Line, Span, Text},
     widgets::{Block, Paragraph, Widget},
 };
 use rodio::{MixerDeviceSink, Source};
-use std::{io::Result, time::Duration};
+use std::{
+    io::Result,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 #[derive(Debug)]
 pub struct UI {
     audio_device: MixerDeviceSink,
     oscillator: Oscillator,
+    current_stop: Option<Arc<AtomicBool>>,
     last_key: char,
     last_freq: String,
     exit: bool,
@@ -28,6 +41,7 @@ impl UI {
         UI {
             audio_device: audio_device,
             oscillator: Oscillator::new(Sine),
+            current_stop: None,
             last_key: '_',
             last_freq: String::from("_"),
             exit: false,
@@ -39,10 +53,17 @@ impl UI {
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+        execute!(
+            std::io::stdout(),
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
+        )?;
+
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
             self.handle_events()?;
         }
+
+        execute!(std::io::stdout(), PopKeyboardEnhancementFlags)?;
         Ok(())
     }
 
@@ -53,14 +74,17 @@ impl UI {
     pub fn handle_events(&mut self) -> Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
+                self.handle_key_press(key_event)
+            }
+            Event::Key(key_event) if key_event.kind == KeyEventKind::Release => {
+                self.handle_key_release()
             }
             _ => {}
         };
         Ok(())
     }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
+    fn handle_key_press(&mut self, key_event: KeyEvent) {
         if key_event.code == KeyCode::Char('c')
             && key_event.modifiers.contains(KeyModifiers::CONTROL)
         {
@@ -92,17 +116,35 @@ impl UI {
         };
 
         if freq > 0.0 {
-            self.last_key = match key_event.code.as_char() {
-                Some(last_key) => last_key,
+            let pressed_key = match key_event.code.as_char() {
+                Some(k) => k,
                 _ => '_',
             };
-            self.last_freq = format!("{freq}");
-            self.oscillator.set_freq(freq);
-            self.audio_device.mixer().add(
-                self.oscillator
-                    .clone()
-                    .take_duration(Duration::from_millis(1000)),
-            );
+            if self.current_stop.is_none() || pressed_key != self.last_key {
+                self.last_key = pressed_key;
+                self.last_freq = format!("{freq}");
+                self.oscillator.set_freq(freq);
+                if let Some(stop) = self.current_stop.take() {
+                    stop.store(true, Ordering::Relaxed);
+                }
+                let stop = Arc::new(AtomicBool::new(false));
+                self.current_stop = Some(Arc::clone(&stop));
+                let source = self.oscillator.clone().stoppable().periodic_access(
+                    Duration::from_millis(10),
+                    move |s| {
+                        if stop.load(Ordering::Relaxed) {
+                            s.stop();
+                        }
+                    },
+                );
+                self.audio_device.mixer().add(source);
+            }
+        }
+    }
+
+    fn handle_key_release(&mut self) {
+        if let Some(stop) = self.current_stop.take() {
+            stop.store(true, Ordering::Relaxed);
         }
     }
 

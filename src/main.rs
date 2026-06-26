@@ -18,10 +18,6 @@ fn main() -> Result<()> {
 
     let sine = Oscillator::new(Sine);
 
-    // let mut keyboard_input = UI::new(audio_device);
-    // keyboard_input.set_oscillator(sine);
-    // keyboard_input.listen()
-
     let mut ui = UI::new(audio_device);
     ui.set_oscillator(sine);
 
