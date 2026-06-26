@@ -1,5 +1,6 @@
 use crate::oscillator::{Oscillator, Waveform::Sine};
 use crate::utils::{A440, get_freq_for_note};
+use crate::voices::Voices;
 use crossterm::{
     event::{
         self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
@@ -27,29 +28,44 @@ use std::{
 };
 
 #[derive(Debug)]
+struct Voice {
+    osc: Oscillator,
+    on: Arc<AtomicBool>,
+}
+
+#[derive(Debug)]
 pub struct UI {
     audio_device: MixerDeviceSink,
-    oscillator: Oscillator,
-    current_stop: Option<Arc<AtomicBool>>,
+    voices: Voices<Voice>,
     last_key: char,
     last_freq: String,
     exit: bool,
 }
 
+const BLACK_KEYS: &[char] = &['2', '3', '4', ' ', '6', '7', ' ', '9', '0', '-'];
+const WHITE_KEYS: &[char] = &['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']'];
+const ALL_KEYS: &[char] = &[
+    '2', '3', '4', '6', '7', '9', '0', '-', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[',
+    ']',
+];
+
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
+        let mut voices = Vec::new();
+        for _ in 0..5 {
+            voices.push(Voice {
+                osc: Oscillator::new(Sine),
+                on: Arc::new(AtomicBool::new(false)),
+            });
+        }
+
         UI {
             audio_device: audio_device,
-            oscillator: Oscillator::new(Sine),
-            current_stop: None,
+            voices: Voices::new(voices),
             last_key: '_',
             last_freq: String::from("_"),
             exit: false,
         }
-    }
-
-    pub fn set_oscillator(&mut self, oscillator: Oscillator) {
-        self.oscillator = oscillator;
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
@@ -77,7 +93,7 @@ impl UI {
                 self.handle_key_press(key_event)
             }
             Event::Key(key_event) if key_event.kind == KeyEventKind::Release => {
-                self.handle_key_release()
+                self.handle_key_release(key_event)
             }
             _ => {}
         };
@@ -120,19 +136,22 @@ impl UI {
                 Some(k) => k,
                 _ => '_',
             };
-            if self.current_stop.is_none() || pressed_key != self.last_key {
+            if pressed_key != self.last_key {
                 self.last_key = pressed_key;
                 self.last_freq = format!("{freq}");
-                self.oscillator.set_freq(freq);
-                if let Some(stop) = self.current_stop.take() {
-                    stop.store(true, Ordering::Relaxed);
+
+                let voice = self.voices.voice_on(self.last_key);
+                voice.osc.set_freq(freq);
+                let on = Arc::clone(&voice.on);
+
+                if !on.load(Ordering::Relaxed) {
+                    on.store(true, Ordering::Relaxed);
                 }
-                let stop = Arc::new(AtomicBool::new(false));
-                self.current_stop = Some(Arc::clone(&stop));
-                let source = self.oscillator.clone().stoppable().periodic_access(
+
+                let source = voice.osc.clone().stoppable().periodic_access(
                     Duration::from_millis(10),
                     move |s| {
-                        if stop.load(Ordering::Relaxed) {
+                        if !on.load(Ordering::Relaxed) {
                             s.stop();
                         }
                     },
@@ -142,9 +161,17 @@ impl UI {
         }
     }
 
-    fn handle_key_release(&mut self) {
-        if let Some(stop) = self.current_stop.take() {
-            stop.store(true, Ordering::Relaxed);
+    fn handle_key_release(&mut self, key_event: KeyEvent) {
+        match key_event.code.as_char() {
+            Some(k) => {
+                if ALL_KEYS.contains(&k) {
+                    match self.voices.voice_off(k) {
+                        Some(voice) => voice.on.store(false, Ordering::Relaxed),
+                        None => (),
+                    };
+                }
+            }
+            None => (),
         }
     }
 
@@ -169,12 +196,9 @@ impl Widget for &UI {
             self.last_freq.clone().blue(),
         ]);
 
-        let black_keys = vec!['2', '3', '4', ' ', '6', '7', ' ', '9', '0', '-'];
-        let white_keys = vec!['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']'];
-
         let black_key_render = Line::from(
             std::iter::once(Span::raw("  "))
-                .chain(black_keys.iter().flat_map(|key| {
+                .chain(BLACK_KEYS.iter().flat_map(|key| {
                     [
                         Span::styled("|", Style::default().fg(Color::White).bg(Color::Black)),
                         Span::styled(
@@ -197,7 +221,7 @@ impl Widget for &UI {
         );
 
         let white_key_render = Line::from(
-            white_keys
+            WHITE_KEYS
                 .iter()
                 .flat_map(|key| {
                     [

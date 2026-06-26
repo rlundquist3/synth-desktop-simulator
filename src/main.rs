@@ -1,11 +1,9 @@
 mod oscillator;
 mod ui;
 mod utils;
+mod voices;
 
-use crate::{
-    oscillator::{Oscillator, Waveform::Sine},
-    ui::UI,
-};
+use crate::ui::UI;
 use rodio::DeviceSinkBuilder;
 use std::io::Result;
 
@@ -16,10 +14,7 @@ fn main() -> Result<()> {
     let audio_device =
         DeviceSinkBuilder::open_default_sink().expect("Should open default audio device");
 
-    let sine = Oscillator::new(Sine);
-
     let mut ui = UI::new(audio_device);
-    ui.set_oscillator(sine);
 
     ratatui::run(|terminal| ui.run(terminal))
 }
