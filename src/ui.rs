@@ -132,32 +132,35 @@ impl UI {
         };
 
         if freq > 0.0 {
-            let pressed_key = match key_event.code.as_char() {
-                Some(k) => k,
-                _ => '_',
-            };
-            if pressed_key != self.last_key {
-                self.last_key = pressed_key;
-                self.last_freq = format!("{freq}");
+            match key_event.code.as_char() {
+                Some(pressed_key) => {
+                    if self.last_key != pressed_key {
+                        self.last_key = pressed_key;
+                        self.last_freq = format!("{freq}");
 
-                let voice = self.voices.voice_on(self.last_key);
-                voice.osc.set_freq(freq);
-                let on = Arc::clone(&voice.on);
+                        let voice = self.voices.voice_on(self.last_key);
+                        voice.osc.set_freq(freq);
+                        let on = Arc::clone(&voice.on);
 
-                if !on.load(Ordering::Relaxed) {
-                    on.store(true, Ordering::Relaxed);
-                }
-
-                let source = voice.osc.clone().stoppable().periodic_access(
-                    Duration::from_millis(10),
-                    move |s| {
                         if !on.load(Ordering::Relaxed) {
-                            s.stop();
+                            on.store(true, Ordering::Relaxed);
                         }
-                    },
-                );
-                self.audio_device.mixer().add(source);
-            }
+
+                        let source = voice
+                            .osc
+                            .clone()
+                            .amplify_decibel(-16.0)
+                            .stoppable()
+                            .periodic_access(Duration::from_millis(10), move |s| {
+                                if !on.load(Ordering::Relaxed) {
+                                    s.stop();
+                                }
+                            });
+                        self.audio_device.mixer().add(source);
+                    }
+                }
+                _ => {}
+            };
         }
     }
 
@@ -182,6 +185,7 @@ impl UI {
 
 impl Widget for &UI {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        // let _text = format!("Output config: {:?}", audio_device.config());
         let title = Line::from(" Terminal Synth ".bold());
         let instructions = Line::from(vec![" Quit ".into(), "<Ctrl+C> ".red().bold()]);
         let block = Block::bordered()
