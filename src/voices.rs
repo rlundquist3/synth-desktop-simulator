@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 #[derive(Debug)]
 pub struct Voices<T> {
-    voices: Vec<T>,
+    pub voices: Vec<T>,
     key_voice_map: HashMap<char, usize>,
     free_voices: VecDeque<usize>,
     used_voices: VecDeque<(usize, char)>,

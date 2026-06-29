@@ -1,3 +1,4 @@
+use crate::instrument::Instrument;
 use crate::oscillator::{Oscillator, Waveform::Sine};
 use crate::utils::{A440, get_freq_for_note};
 use crate::voices::Voices;
@@ -27,16 +28,17 @@ use std::{
     time::Duration,
 };
 
-#[derive(Debug)]
-struct Voice {
-    osc: Oscillator,
-    on: Arc<AtomicBool>,
-}
+// #[derive(Debug)]
+// struct Voice {
+//     osc: Oscillator,
+//     on: Arc<AtomicBool>,
+// }
 
 #[derive(Debug)]
 pub struct UI {
     audio_device: MixerDeviceSink,
-    voices: Voices<Voice>,
+    instrument: Instrument,
+    // voices: Voices<Voice>,
     last_key: char,
     last_freq: String,
     exit: bool,
@@ -51,17 +53,18 @@ const ALL_KEYS: &[char] = &[
 
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
-        let mut voices = Vec::new();
-        for _ in 0..5 {
-            voices.push(Voice {
-                osc: Oscillator::new(Sine),
-                on: Arc::new(AtomicBool::new(false)),
-            });
-        }
+        // let mut voices = Vec::new();
+        // for _ in 0..5 {
+        //     voices.push(Voice {
+        //         osc: Oscillator::new(Sine),
+        //         on: Arc::new(AtomicBool::new(false)),
+        //     });
+        // }
 
         UI {
             audio_device: audio_device,
-            voices: Voices::new(voices),
+            // voices: Voices::new(voices),
+            instrument: Instrument::new(Sine),
             last_key: '_',
             last_freq: String::from("_"),
             exit: false,
@@ -138,7 +141,7 @@ impl UI {
                         self.last_key = pressed_key;
                         self.last_freq = format!("{freq}");
 
-                        let voice = self.voices.voice_on(self.last_key);
+                        let voice = self.instrument.voices.voice_on(self.last_key);
                         voice.osc.set_freq(freq);
                         let on = Arc::clone(&voice.on);
 
@@ -168,7 +171,7 @@ impl UI {
         match key_event.code.as_char() {
             Some(k) => {
                 if ALL_KEYS.contains(&k) {
-                    match self.voices.voice_off(k) {
+                    match self.instrument.voices.voice_off(k) {
                         Some(voice) => voice.on.store(false, Ordering::Relaxed),
                         None => (),
                     };
