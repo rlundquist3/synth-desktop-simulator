@@ -1,4 +1,4 @@
-mod filter;
+mod effects;
 mod instrument;
 mod oscillator;
 mod ui;

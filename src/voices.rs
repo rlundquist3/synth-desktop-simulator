@@ -1,6 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Voices<T> {
     pub voices: Vec<T>,
     key_voice_map: HashMap<char, usize>,

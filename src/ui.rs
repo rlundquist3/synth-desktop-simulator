@@ -1,7 +1,6 @@
 use crate::instrument::Instrument;
-use crate::oscillator::{Oscillator, Waveform::Sine};
+use crate::oscillator::Waveform::Sine;
 use crate::utils::{A440, get_freq_for_note};
-use crate::voices::Voices;
 use crossterm::{
     event::{
         self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
@@ -18,15 +17,8 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Paragraph, Widget},
 };
-use rodio::{MixerDeviceSink, Source};
-use std::{
-    io::Result,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Duration,
-};
+use rodio::MixerDeviceSink;
+use std::{io::Result, sync::atomic::Ordering};
 
 // #[derive(Debug)]
 // struct Voice {
@@ -53,17 +45,8 @@ const ALL_KEYS: &[char] = &[
 
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
-        // let mut voices = Vec::new();
-        // for _ in 0..5 {
-        //     voices.push(Voice {
-        //         osc: Oscillator::new(Sine),
-        //         on: Arc::new(AtomicBool::new(false)),
-        //     });
-        // }
-
         UI {
             audio_device: audio_device,
-            // voices: Voices::new(voices),
             instrument: Instrument::new(Sine),
             last_key: '_',
             last_freq: String::from("_"),
@@ -76,6 +59,8 @@ impl UI {
             std::io::stdout(),
             PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
         )?;
+
+        self.audio_device.mixer().add(self.instrument.clone());
 
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
@@ -135,35 +120,13 @@ impl UI {
         };
 
         if freq > 0.0 {
-            match key_event.code.as_char() {
-                Some(pressed_key) => {
-                    if self.last_key != pressed_key {
-                        self.last_key = pressed_key;
-                        self.last_freq = format!("{freq}");
-
-                        let voice = self.instrument.voices.voice_on(self.last_key);
-                        voice.osc.set_freq(freq);
-                        let on = Arc::clone(&voice.on);
-
-                        if !on.load(Ordering::Relaxed) {
-                            on.store(true, Ordering::Relaxed);
-                        }
-
-                        let source = voice
-                            .osc
-                            .clone()
-                            .amplify_decibel(-16.0)
-                            .stoppable()
-                            .periodic_access(Duration::from_millis(10), move |s| {
-                                if !on.load(Ordering::Relaxed) {
-                                    s.stop();
-                                }
-                            });
-                        self.audio_device.mixer().add(source);
-                    }
-                }
-                _ => {}
-            };
+            if let Some(pressed_key) = key_event.code.as_char() {
+                self.last_key = pressed_key;
+                self.last_freq = format!("{freq}");
+                let voice = self.instrument.voices.voice_on(pressed_key);
+                voice.osc.lock().unwrap().set_freq(freq);
+                voice.on.store(true, Ordering::Relaxed);
+            }
         }
     }
 
