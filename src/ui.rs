@@ -20,17 +20,10 @@ use ratatui::{
 use rodio::MixerDeviceSink;
 use std::{io::Result, sync::atomic::Ordering};
 
-// #[derive(Debug)]
-// struct Voice {
-//     osc: Oscillator,
-//     on: Arc<AtomicBool>,
-// }
-
 #[derive(Debug)]
 pub struct UI {
     audio_device: MixerDeviceSink,
     instrument: Instrument,
-    // voices: Voices<Voice>,
     last_key: char,
     last_freq: String,
     exit: bool,
@@ -131,16 +124,12 @@ impl UI {
     }
 
     fn handle_key_release(&mut self, key_event: KeyEvent) {
-        match key_event.code.as_char() {
-            Some(k) => {
-                if ALL_KEYS.contains(&k) {
-                    match self.instrument.voices.voice_off(k) {
-                        Some(voice) => voice.on.store(false, Ordering::Relaxed),
-                        None => (),
-                    };
+        if let Some(k) = key_event.code.as_char() {
+            if ALL_KEYS.contains(&k) {
+                if let Some(voice) = self.instrument.voices.voice_off(k) {
+                    voice.on.store(false, Ordering::Relaxed);
                 }
             }
-            None => (),
         }
     }
 

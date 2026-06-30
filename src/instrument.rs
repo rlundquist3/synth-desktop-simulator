@@ -80,7 +80,8 @@ impl Iterator for Instrument {
         Some(
             self.effects
                 .iter_mut()
-                .fold(raw, |sample, effect| effect.process(sample)),
+                .fold(raw, |sample, effect| effect.process(sample))
+                .clamp(-1.0, 1.0),
         )
     }
 }
