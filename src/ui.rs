@@ -8,6 +8,7 @@ use crossterm::{
     },
     execute,
 };
+use ratatui::layout::{Constraint, Flex, Layout};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
@@ -20,21 +21,95 @@ use ratatui::{
 use rodio::MixerDeviceSink;
 use std::{io::Result, sync::atomic::Ordering};
 
-#[derive(Debug)]
-pub struct UI {
-    audio_device: MixerDeviceSink,
-    instrument: Instrument,
-    last_key: char,
-    last_freq: String,
-    exit: bool,
-}
-
 const BLACK_KEYS: &[char] = &['2', '3', '4', ' ', '6', '7', ' ', '9', '0', '-'];
 const WHITE_KEYS: &[char] = &['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']'];
 const ALL_KEYS: &[char] = &[
     '2', '3', '4', '6', '7', '9', '0', '-', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[',
     ']',
 ];
+
+#[derive(Debug)]
+struct EffectSection {
+    row_count: usize,
+    column_count: usize,
+    total_count: usize,
+    focus_index: usize,
+    is_editing: bool,
+}
+
+impl EffectSection {
+    pub fn new(row_count: usize, column_count: usize) -> Self {
+        EffectSection {
+            row_count,
+            column_count,
+            total_count: row_count * column_count,
+            focus_index: 0,
+            is_editing: false,
+        }
+    }
+
+    pub fn select(&mut self) {
+        self.is_editing = true;
+    }
+
+    pub fn deselect(&mut self) {
+        self.is_editing = false;
+    }
+
+    pub fn move_right(&mut self) {
+        if self.is_editing {
+            return;
+        }
+
+        if self.focus_index % self.column_count == self.column_count - 1 {
+            self.focus_index -= self.column_count - 1;
+        } else {
+            self.focus_index += 1;
+        }
+    }
+
+    pub fn move_left(&mut self) {
+        if self.is_editing {
+            return;
+        }
+
+        if self.focus_index % self.column_count == 0 {
+            self.focus_index += self.column_count - 1;
+        } else {
+            self.focus_index -= 1;
+        }
+    }
+
+    pub fn move_down(&mut self) {
+        if self.is_editing {
+            return;
+        }
+
+        self.focus_index = (self.focus_index + self.column_count) % self.total_count;
+    }
+
+    pub fn move_up(&mut self) {
+        if self.is_editing {
+            return;
+        }
+
+        if self.focus_index < self.column_count {
+            self.focus_index += (self.row_count - 1) * self.column_count;
+        } else {
+            self.focus_index -= self.column_count;
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct UI {
+    audio_device: MixerDeviceSink,
+    instrument: Instrument,
+    last_key: char,
+    last_freq: String,
+    effect_section: EffectSection,
+    exit: bool,
+}
 
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
@@ -43,6 +118,7 @@ impl UI {
             instrument: Instrument::new(Sine),
             last_key: '_',
             last_freq: String::from("_"),
+            effect_section: EffectSection::new(3, 3),
             exit: false,
         }
     }
@@ -121,6 +197,16 @@ impl UI {
                 voice.on.store(true, Ordering::Relaxed);
             }
         }
+
+        match key_event.code {
+            KeyCode::Enter => self.effect_section.select(),
+            KeyCode::Esc => self.effect_section.deselect(),
+            KeyCode::Left => self.effect_section.move_left(),
+            KeyCode::Right => self.effect_section.move_right(),
+            KeyCode::Up => self.effect_section.move_up(),
+            KeyCode::Down => self.effect_section.move_down(),
+            _ => (),
+        }
     }
 
     fn handle_key_release(&mut self, key_event: KeyEvent) {
@@ -140,14 +226,26 @@ impl UI {
 
 impl Widget for &UI {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        // let _text = format!("Output config: {:?}", audio_device.config());
         let title = Line::from(" Terminal Synth ".bold());
         let instructions = Line::from(vec![" Quit ".into(), "<Ctrl+C> ".red().bold()]);
-        let block = Block::bordered()
+        let container = Block::bordered()
             .title(title.centered())
             .title_bottom(instructions.right_aligned())
             .border_set(border::THICK);
 
+        let inner_area = container.inner(area);
+        container.render(area, buf);
+
+        // let outer_rows = Layout::vertical([Constraint::Length(20)]).spacing(1);
+        let outer_columns = Layout::horizontal([Constraint::Length(60), Constraint::Length(90)])
+            .flex(Flex::SpaceBetween);
+
+        let inner_rows = Layout::vertical((0..3).map(|_| Constraint::Length(6))).spacing(1);
+        let inner_columns = Layout::horizontal((0..3).map(|_| Constraint::Length(18)));
+
+        let outer_cells = outer_columns.split(inner_area);
+
+        // render keyboard
         let key_text = Line::from(vec![
             "Key: ".into(),
             self.last_key.to_string().green(),
@@ -204,10 +302,31 @@ impl Widget for &UI {
                 .collect::<Vec<_>>(),
         );
 
-        let text = Text::from(vec![key_text, black_key_render, white_key_render]);
-        Paragraph::new(text)
+        let keyboard = Text::from(vec![key_text, black_key_render, white_key_render]);
+        Paragraph::new(keyboard)
             .left_aligned()
-            .block(block)
-            .render(area, buf);
+            .block(Block::bordered())
+            .render(outer_cells[0], buf);
+
+        // render controls
+        let control_rows = inner_rows.split(outer_cells[1]);
+        let control_cells = control_rows
+            .iter()
+            .flat_map(|&row| inner_columns.split(row).to_vec());
+
+        for (i, cell) in control_cells.enumerate() {
+            let container = if i == self.effect_section.focus_index {
+                match self.effect_section.is_editing {
+                    true => Block::bordered().on_green(),
+                    false => Block::bordered().on_blue(),
+                }
+            } else {
+                Block::bordered()
+            };
+            Paragraph::new(format!("Area {:02}", i + 1))
+                .centered()
+                .block(container)
+                .render(cell, buf);
+        }
     }
 }
