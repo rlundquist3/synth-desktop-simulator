@@ -1,4 +1,6 @@
-use crate::instrument::Instrument;
+use crate::effects::ParameterChange::{Decrement, Increment};
+use crate::effects::{Effect, EffectParameter};
+use crate::instrument::{self, Instrument};
 use crate::oscillator::Waveform::Sine;
 use crate::utils::{A440, get_freq_for_note};
 use crossterm::{
@@ -35,6 +37,7 @@ struct EffectSection {
     total_count: usize,
     focus_index: usize,
     is_editing: bool,
+    param_focus_index: usize,
 }
 
 impl EffectSection {
@@ -45,6 +48,7 @@ impl EffectSection {
             total_count: row_count * column_count,
             focus_index: 0,
             is_editing: false,
+            param_focus_index: 0,
         }
     }
 
@@ -113,12 +117,14 @@ pub struct UI {
 
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
+        let instrument = Instrument::new(Sine);
+
         UI {
             audio_device: audio_device,
-            instrument: Instrument::new(Sine),
+            instrument,
             last_key: '_',
             last_freq: String::from("_"),
-            effect_section: EffectSection::new(3, 3),
+            effect_section: EffectSection::new(1, 3),
             exit: false,
         }
     }
@@ -198,14 +204,41 @@ impl UI {
             }
         }
 
-        match key_event.code {
-            KeyCode::Enter => self.effect_section.select(),
-            KeyCode::Esc => self.effect_section.deselect(),
-            KeyCode::Left => self.effect_section.move_left(),
-            KeyCode::Right => self.effect_section.move_right(),
-            KeyCode::Up => self.effect_section.move_up(),
-            KeyCode::Down => self.effect_section.move_down(),
-            _ => (),
+        if self.effect_section.is_editing {
+            let effect = &mut self.instrument.effects[self.effect_section.focus_index];
+            let params = effect.get_parameters();
+            let param_index = self.effect_section.param_focus_index;
+
+            match key_event.code {
+                KeyCode::Esc => self.effect_section.deselect(),
+                KeyCode::Left => {
+                    if param_index > 0 {
+                        self.effect_section.param_focus_index -= 1;
+                    }
+                }
+                KeyCode::Right => {
+                    if param_index < params.len() - 1 {
+                        self.effect_section.param_focus_index += 1;
+                    }
+                }
+                KeyCode::Up => {
+                    effect.update_parameter(param_index, Increment);
+                }
+                KeyCode::Down => {
+                    effect.update_parameter(param_index, Decrement);
+                }
+                _ => (),
+            }
+        } else {
+            match key_event.code {
+                KeyCode::Enter => self.effect_section.select(),
+                KeyCode::Esc => self.effect_section.deselect(),
+                KeyCode::Left => self.effect_section.move_left(),
+                KeyCode::Right => self.effect_section.move_right(),
+                KeyCode::Up => self.effect_section.move_up(),
+                KeyCode::Down => self.effect_section.move_down(),
+                _ => (),
+            }
         }
     }
 
@@ -236,12 +269,15 @@ impl Widget for &UI {
         let inner_area = container.inner(area);
         container.render(area, buf);
 
-        // let outer_rows = Layout::vertical([Constraint::Length(20)]).spacing(1);
         let outer_columns = Layout::horizontal([Constraint::Length(60), Constraint::Length(90)])
             .flex(Flex::SpaceBetween);
 
-        let inner_rows = Layout::vertical((0..3).map(|_| Constraint::Length(6))).spacing(1);
-        let inner_columns = Layout::horizontal((0..3).map(|_| Constraint::Length(18)));
+        let inner_rows =
+            Layout::vertical((0..self.effect_section.row_count).map(|_| Constraint::Length(7)))
+                .spacing(1);
+        let inner_columns = Layout::horizontal(
+            (0..self.effect_section.column_count).map(|_| Constraint::Length(18)),
+        );
 
         let outer_cells = outer_columns.split(inner_area);
 
@@ -323,10 +359,48 @@ impl Widget for &UI {
             } else {
                 Block::bordered()
             };
-            Paragraph::new(format!("Area {:02}", i + 1))
-                .centered()
-                .block(container)
-                .render(cell, buf);
+
+            if i < self.instrument.effects.len() {
+                let effect = &self.instrument.effects[i];
+                let parameters = effect.get_parameters();
+
+                let inner_cell = container.inner(cell);
+                container.render(cell, buf);
+
+                let effect_row_constraints =
+                    Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]);
+                let parameter_columns =
+                    Layout::horizontal((0..parameters.len()).map(|_| Constraint::Length(9)));
+
+                let effect_rows = effect_row_constraints.split(inner_cell);
+                Paragraph::new(effect.get_name())
+                    .centered()
+                    .render(effect_rows[0], buf);
+                let parameter_cells = parameter_columns.split(effect_rows[1]);
+
+                for (i, c) in parameter_cells.iter().enumerate() {
+                    let container = if i == self.effect_section.param_focus_index {
+                        match self.effect_section.is_editing {
+                            true => Block::new().on_blue(),
+                            false => Block::new().on_cyan(),
+                        }
+                    } else {
+                        Block::new()
+                    };
+
+                    Paragraph::new(format!(
+                        "{}\n↑\n{}\n↓",
+                        parameters[i].name, parameters[i].get_value()
+                    ))
+                    .block(container)
+                    .render(*c, buf);
+                }
+            } else {
+                Paragraph::new(format!("Effect {:02}", i + 1))
+                    .centered()
+                    .block(container)
+                    .render(cell, buf);
+            }
         }
     }
 }

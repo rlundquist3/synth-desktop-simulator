@@ -38,6 +38,7 @@ impl Iterator for Voices<Voice> {
 #[derive(Debug)]
 pub struct Instrument {
     pub voices: Voices<Voice>,
+    pub headroom_gain: Box<dyn Effect>,
     pub effects: Vec<Box<dyn Effect>>,
 }
 
@@ -45,6 +46,7 @@ impl Clone for Instrument {
     fn clone(&self) -> Self {
         Instrument {
             voices: self.voices.clone(),
+            headroom_gain: self.headroom_gain.clone_box(),
             effects: self.effects.iter().map(|e| e.clone_box()).collect(),
         }
     }
@@ -63,11 +65,13 @@ impl Instrument {
 
         let mut effects: Vec<Box<dyn Effect>> = Vec::new();
 
-        // TODO: if voices becomes a dynamic size, make this dynamic as well
-        effects.push(Box::new(Gain::new(-16.0)));
-        effects.push(Box::new(Echo::new(SAMPLE_RATE / 2)));
+        effects.push(Box::new(Echo::new(SAMPLE_RATE / 2, 0.5)));
 
-        Instrument { voices, effects }
+        Instrument {
+            voices,
+            headroom_gain: Box::new(Gain::new(-16.0)),
+            effects,
+        }
     }
 }
 
@@ -76,11 +80,12 @@ impl Iterator for Instrument {
 
     fn next(&mut self) -> Option<f32> {
         let raw = self.voices.next()?;
+        let headroom_corrected = self.headroom_gain.process(raw);
 
         Some(
             self.effects
                 .iter_mut()
-                .fold(raw, |sample, effect| effect.process(sample))
+                .fold(headroom_corrected, |sample, effect| effect.process(sample))
                 .clamp(-1.0, 1.0),
         )
     }
