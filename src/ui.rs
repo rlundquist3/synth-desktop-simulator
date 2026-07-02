@@ -1,6 +1,5 @@
 use crate::effects::ParameterChange::{Decrement, Increment};
-use crate::effects::{Effect, EffectParameter};
-use crate::instrument::{self, Instrument};
+use crate::instrument::Instrument;
 use crate::oscillator::Waveform::Sine;
 use crate::utils::{A440, get_freq_for_note};
 use crossterm::{
@@ -53,10 +52,12 @@ impl EffectSection {
     }
 
     pub fn select(&mut self) {
+        self.param_focus_index = 0;
         self.is_editing = true;
     }
 
     pub fn deselect(&mut self) {
+        self.param_focus_index = 0;
         self.is_editing = false;
     }
 
@@ -118,13 +119,16 @@ pub struct UI {
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
         let instrument = Instrument::new(Sine);
+        let effect_count = instrument.effects.len();
+        let column_count = effect_count.min(3);
+        let row_count = effect_count.div_ceil(column_count);
 
         UI {
             audio_device: audio_device,
             instrument,
             last_key: '_',
             last_freq: String::from("_"),
-            effect_section: EffectSection::new(1, 3),
+            effect_section: EffectSection::new(row_count, column_count),
             exit: false,
         }
     }
@@ -232,7 +236,6 @@ impl UI {
         } else {
             match key_event.code {
                 KeyCode::Enter => self.effect_section.select(),
-                KeyCode::Esc => self.effect_section.deselect(),
                 KeyCode::Left => self.effect_section.move_left(),
                 KeyCode::Right => self.effect_section.move_right(),
                 KeyCode::Up => self.effect_section.move_up(),
@@ -378,19 +381,20 @@ impl Widget for &UI {
                     .render(effect_rows[0], buf);
                 let parameter_cells = parameter_columns.split(effect_rows[1]);
 
-                for (i, c) in parameter_cells.iter().enumerate() {
-                    let container = if i == self.effect_section.param_focus_index {
-                        match self.effect_section.is_editing {
-                            true => Block::new().on_blue(),
-                            false => Block::new().on_cyan(),
-                        }
+                for (j, c) in parameter_cells.iter().enumerate() {
+                    let container = if self.effect_section.is_editing
+                        && i == self.effect_section.focus_index
+                        && j == self.effect_section.param_focus_index
+                    {
+                        Block::new().on_cyan()
                     } else {
                         Block::new()
                     };
 
                     Paragraph::new(format!(
                         "{}\n↑\n{}\n↓",
-                        parameters[i].name, parameters[i].get_value()
+                        parameters[i].name,
+                        parameters[i].get_value()
                     ))
                     .block(container)
                     .render(*c, buf);

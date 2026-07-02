@@ -1,12 +1,15 @@
 pub mod echo;
 pub mod gain;
 
-use std::sync::{Arc, atomic::{AtomicU32, Ordering}};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering},
+};
 
 #[derive(Debug, Clone)]
 pub struct EffectParameter {
     pub name: &'static str,
-    pub value: Arc<AtomicU32>,
+    pub value: Arc<AtomicU32>, // value is Arc<AtomicU32> so it can be used safely across both the audio and UI threads
     pub delta: f32,
 }
 
@@ -38,5 +41,9 @@ pub trait Effect: std::fmt::Debug + Send {
     fn clone_box(&self) -> Box<dyn Effect>;
     fn get_name(&self) -> String;
     fn get_parameters(&self) -> Vec<EffectParameter>;
-    fn update_parameter(&mut self, index: usize, change: ParameterChange) -> Option<EffectParameter>;
+    fn update_parameter(
+        &mut self,
+        index: usize,
+        change: ParameterChange,
+    ) -> Option<EffectParameter>;
 }
