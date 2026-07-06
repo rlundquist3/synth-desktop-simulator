@@ -393,8 +393,8 @@ impl Widget for &UI {
 
                     Paragraph::new(format!(
                         "{}\n↑\n{}\n↓",
-                        parameters[i].name,
-                        parameters[i].get_value()
+                        parameters[j].name,
+                        parameters[j].get_value()
                     ))
                     .block(container)
                     .render(*c, buf);
