@@ -1,6 +1,8 @@
 use crate::effects::ParameterChange::{Decrement, Increment};
-use crate::instrument::Instrument;
-use crate::oscillator::Waveform::Sine;
+// use crate::instrument;
+// use crate::instrument::Instrument;
+use crate::instrument_fm::InstrumentFM;
+// use crate::oscillator::Waveform::Sine;
 use crate::utils::{A440, get_freq_for_note};
 use crossterm::{
     event::{
@@ -109,7 +111,7 @@ impl EffectSection {
 #[derive(Debug)]
 pub struct UI {
     audio_device: MixerDeviceSink,
-    instrument: Instrument,
+    instrument: InstrumentFM,
     last_key: char,
     last_freq: String,
     effect_section: EffectSection,
@@ -118,7 +120,8 @@ pub struct UI {
 
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
-        let instrument = Instrument::new(Sine);
+        // let instrument = Instrument::new(Sine);
+        let instrument = InstrumentFM::new();
         let effect_count = instrument.effects.len();
         let column_count = effect_count.min(3);
         let row_count = effect_count.div_ceil(column_count);
@@ -203,7 +206,8 @@ impl UI {
                 self.last_key = pressed_key;
                 self.last_freq = format!("{freq}");
                 let voice = self.instrument.voices.voice_on(pressed_key);
-                voice.osc.lock().unwrap().set_freq(freq);
+                // voice.osc.lock().unwrap().set_freq(freq);
+                voice.synth.lock().unwrap().set_fundamental_freq(freq);
                 voice.on.store(true, Ordering::Relaxed);
             }
         }
@@ -392,7 +396,7 @@ impl Widget for &UI {
                     };
 
                     Paragraph::new(format!(
-                        "{}\n↑\n{}\n↓",
+                        "{}\n↑\n{:.1}\n↓",
                         parameters[j].name,
                         parameters[j].get_value()
                     ))

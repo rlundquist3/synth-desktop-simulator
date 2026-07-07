@@ -12,6 +12,7 @@ pub use self::Waveform::*;
 #[derive(Clone, Debug)]
 pub struct Oscillator {
     waveform: Waveform,
+    pub freq: f32,
     phase: f32,
     phase_delta: f32,
     last_sample: f32,
@@ -21,6 +22,7 @@ impl Oscillator {
     pub fn new(waveform: Waveform) -> Self {
         Oscillator {
             waveform: waveform,
+            freq: 0.0,
             phase: 0.0,
             phase_delta: 0.0,
             last_sample: 0.0,
@@ -29,13 +31,20 @@ impl Oscillator {
 
     pub fn set_freq(&mut self, freq: f32) {
         self.phase_delta = freq * 2.0 * PI / (SAMPLE_RATE as f32);
+        self.freq = freq;
     }
 
-    pub fn next_sample(&mut self) -> f32 {
+    pub fn next_phase(&mut self) -> f32 {
         self.phase += self.phase_delta;
         if self.phase >= 2.0 * PI {
             self.phase -= 2.0 * PI;
         }
+
+        self.phase
+    }
+
+    pub fn next_sample(&mut self) -> f32 {
+        self.next_phase();
 
         self.last_sample = match self.waveform {
             Sine => self.phase.sin(),

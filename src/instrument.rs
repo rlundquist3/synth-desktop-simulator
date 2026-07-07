@@ -65,7 +65,7 @@ impl Instrument {
 
         let mut effects: Vec<Box<dyn Effect>> = Vec::new();
 
-        effects.push(Box::new(Echo::new(SAMPLE_RATE / 2, 0.5)));
+        effects.push(Box::new(Echo::new(0, 0.0)));
 
         Instrument {
             voices,
