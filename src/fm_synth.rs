@@ -1,16 +1,12 @@
-use rodio::Source;
-use std::{num::NonZero, time::Duration};
-
 use crate::{
-    SAMPLE_RATE,
     note::Note,
     oscillator::{Oscillator, Waveform::Sine},
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FreqRatio(pub f32, pub f32);
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FMSynth {
     freq_ratio: FreqRatio,
     mod_index: f32,
@@ -54,23 +50,5 @@ impl Iterator for FMSynth {
         let m = self.mod_osc.next_phase();
 
         Some(self.carrier_amp * (c + self.mod_index * m.sin()).sin())
-    }
-}
-
-impl Source for FMSynth {
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        None
     }
 }

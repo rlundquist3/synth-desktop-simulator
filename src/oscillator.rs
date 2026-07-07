@@ -1,5 +1,4 @@
-use rodio::Source;
-use std::{f32::consts::PI, num::NonZero, time::Duration};
+use std::f32::consts::PI;
 
 use crate::{SAMPLE_RATE, note::Note};
 
@@ -56,24 +55,6 @@ impl Oscillator {
 impl Note for Oscillator {
     fn set_freq(&mut self, freq: f32) {
         self.set_freq(freq);
-    }
-}
-
-impl Source for Oscillator {
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        None
     }
 }
 

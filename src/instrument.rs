@@ -61,12 +61,11 @@ impl<T> Clone for Instrument<T> {
 }
 
 impl<T: Note> Instrument<T> {
-    pub fn new(notes: Vec<T>) -> Self {
+    pub fn new(signal_source: T) -> Self {
         let voices = Voices::new(
-            notes
-                .into_iter()
-                .map(|n| Voice {
-                    note: Arc::new(Mutex::new(n)),
+            (0..5)
+                .map(|_| Voice {
+                    note: Arc::new(Mutex::new(signal_source.clone())),
                     on: Arc::new(AtomicBool::new(false)),
                 })
                 .collect(),

@@ -120,11 +120,7 @@ pub struct UI {
 
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
-        let instrument = Instrument::new(
-            (0..5)
-                .map(|_| FMSynth::new(FreqRatio(2.0, 1.0), PI))
-                .collect(),
-        );
+        let instrument = Instrument::new(FMSynth::new(FreqRatio(2.0, 1.0), PI));
         let effect_count = instrument.effects.len();
         let column_count = effect_count.min(3);
         let row_count = effect_count.div_ceil(column_count);
