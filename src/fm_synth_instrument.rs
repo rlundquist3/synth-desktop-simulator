@@ -1,0 +1,199 @@
+use std::f32::consts::PI;
+use std::fmt::Debug;
+use std::num::NonZero;
+
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
+use std::time::Duration;
+
+use rodio::Source;
+
+use crate::SAMPLE_RATE;
+use crate::effects::Effect;
+use crate::effects::echo::Echo;
+use crate::effects::gain::Gain;
+use crate::fm_synth::FMSynth;
+use crate::parameter::{
+    Parameter,
+    ParameterChange::{self, Decrement, Increment},
+    UserParameters,
+};
+use crate::voices::Voices;
+
+const MOD_INDEX_OPTIONS: &[f32] = &[1.0, 2.0, 3.0, PI, 4.0, 5.0, 2.0 * PI];
+
+#[derive(Clone, Copy, Debug)]
+pub struct FreqRatio(pub f32, pub f32);
+
+#[derive(Debug)]
+pub struct Voice {
+    pub note: Arc<Mutex<FMSynth>>,
+    pub on: Arc<AtomicBool>,
+}
+
+impl Clone for Voice {
+    fn clone(&self) -> Self {
+        Voice {
+            note: Arc::clone(&self.note),
+            on: Arc::clone(&self.on),
+        }
+    }
+}
+
+impl Iterator for Voices<Voice> {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        Some(self.voices.iter_mut().fold(0.0, |acc: f32, v| {
+            if v.on.load(Ordering::Relaxed) {
+                acc + v.note.lock().unwrap().next().unwrap_or(0.0)
+            } else {
+                acc
+            }
+        }))
+    }
+}
+
+#[derive(Debug)]
+pub struct FMSynthInstrument {
+    pub voices: Voices<Voice>,
+    pub headroom_gain: Box<dyn Effect>,
+    pub effects: Vec<Box<dyn Effect>>,
+    parameters: Vec<Parameter>,
+}
+
+impl Clone for FMSynthInstrument {
+    fn clone(&self) -> Self {
+        FMSynthInstrument {
+            voices: self.voices.clone(),
+            parameters: self.parameters.clone(),
+            headroom_gain: self.headroom_gain.clone_box(),
+            effects: self.effects.iter().map(|e| e.clone_box()).collect(),
+        }
+    }
+}
+
+impl FMSynthInstrument {
+    pub fn new() -> Self {
+        let signal_source = FMSynth::new();
+        let voices = Voices::new(
+            (0..5)
+                .map(|_| Voice {
+                    note: Arc::new(Mutex::new(signal_source.clone())),
+                    on: Arc::new(AtomicBool::new(false)),
+                })
+                .collect(),
+        );
+
+        let mut effects: Vec<Box<dyn Effect>> = Vec::new();
+        effects.push(Box::new(Echo::new(0, 0.0)));
+
+        FMSynthInstrument {
+            voices,
+            parameters: vec![
+                Parameter::new("C", 1.0, 1.0, (1.0, 10.0)),
+                Parameter::new("M", 1.0, 1.0, (1.0, 10.0)),
+                Parameter::new("Mod Index", 3.0, 1.0, (1.0, MOD_INDEX_OPTIONS.len() as f32)),
+                Parameter::new("LFO Amp", 0.0, 0.1, (0.0, 5.0)),
+                Parameter::new("LFO Freq", 0.0, 1.0, (0.0, 20.0)),
+            ],
+            headroom_gain: Box::new(Gain::new(-16.0)),
+            effects,
+        }
+    }
+}
+
+impl Iterator for FMSynthInstrument {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        let raw = self.voices.next()?;
+        let headroom_corrected = self.headroom_gain.process(raw);
+
+        Some(
+            self.effects
+                .iter_mut()
+                .fold(headroom_corrected, |sample, effect| effect.process(sample))
+                .clamp(-1.0, 1.0),
+        )
+    }
+}
+
+impl UserParameters for FMSynthInstrument {
+    fn get_parameters(&self) -> Vec<Parameter> {
+        self.parameters.clone()
+    }
+
+    fn update_parameter(&mut self, index: usize, change: ParameterChange) -> Option<Parameter> {
+        let param = self.parameters.get(index)?;
+        let delta = match change {
+            Increment => param.delta,
+            Decrement => -param.delta,
+        };
+        let updated_value = (param.get_value() + delta).clamp(param.range.0, param.range.1);
+
+        param.set_value(updated_value);
+
+        match index {
+            0 => {
+                self.voices.voices.iter().for_each(|voice| {
+                    let mut note = voice.note.lock().unwrap();
+                    let existing = note.get_freq_ratio();
+                    note.set_freq_ratio(FreqRatio(updated_value, existing.1))
+                });
+                Some(param.clone())
+            }
+            1 => {
+                self.voices.voices.iter().for_each(|voice| {
+                    let mut note = voice.note.lock().unwrap();
+                    let existing = note.get_freq_ratio();
+                    note.set_freq_ratio(FreqRatio(existing.0, updated_value))
+                });
+                Some(param.clone())
+            }
+            2 => {
+                let mod_index = MOD_INDEX_OPTIONS[updated_value as usize];
+                self.voices
+                    .voices
+                    .iter()
+                    .for_each(|voice| voice.note.lock().unwrap().set_mod_index(mod_index));
+                Some(param.clone())
+            }
+            3 => {
+                self.voices
+                    .voices
+                    .iter()
+                    .for_each(|voice| voice.note.lock().unwrap().set_lfo_amp(updated_value));
+                Some(param.clone())
+            }
+            4 => {
+                self.voices
+                    .voices
+                    .iter()
+                    .for_each(|voice| voice.note.lock().unwrap().set_lfo_freq(updated_value));
+                Some(param.clone())
+            }
+            _ => None,
+        }
+    }
+}
+
+impl Source for FMSynthInstrument {
+    fn channels(&self) -> NonZero<u16> {
+        NonZero::new(1).unwrap()
+    }
+
+    fn sample_rate(&self) -> NonZero<u32> {
+        NonZero::new(SAMPLE_RATE).unwrap()
+    }
+
+    fn current_span_len(&self) -> Option<usize> {
+        None
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        None
+    }
+}

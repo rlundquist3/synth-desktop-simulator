@@ -238,7 +238,7 @@ impl UI {
                     _ => (),
                 }
             } else {
-                let effect = &mut self.instrument.effects[self.controls_interface.focus_index + 1];
+                let effect = &mut self.instrument.effects[self.controls_interface.focus_index - 1];
                 let params = effect.get_parameters();
 
                 match key_event.code {
@@ -304,6 +304,7 @@ impl Widget for &UI {
         let outer_columns = Layout::horizontal([Constraint::Length(60), Constraint::Length(90)])
             .flex(Flex::SpaceBetween);
 
+        // TODO: put instrument controls on first row alone, then effects in a grid below
         let inner_rows =
             Layout::vertical((0..self.controls_interface.row_count).map(|_| Constraint::Length(7)))
                 .spacing(1);
