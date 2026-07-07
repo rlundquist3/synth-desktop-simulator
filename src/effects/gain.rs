@@ -1,7 +1,9 @@
 use crate::{
-    effects::{
-        Effect, EffectParameter,
+    effects::Effect,
+    parameter::{
+        Parameter,
         ParameterChange::{self, Decrement, Increment},
+        UserParameters,
     },
     utils::db_to_linear_gain,
 };
@@ -10,7 +12,7 @@ use crate::{
 pub struct Gain {
     gain_db: f32,
     gain_linear: f32,
-    parameters: Vec<EffectParameter>,
+    parameters: Vec<Parameter>,
 }
 
 impl Gain {
@@ -18,7 +20,7 @@ impl Gain {
         Gain {
             gain_db,
             gain_linear: db_to_linear_gain(gain_db),
-            parameters: vec![EffectParameter::new("Gain", gain_db, 0.5)],
+            parameters: vec![Parameter::new("Gain", gain_db, 0.5, (-16.0, 12.0))],
         }
     }
 }
@@ -44,22 +46,20 @@ impl Effect for Gain {
     fn get_name(&self) -> String {
         String::from("Gain")
     }
+}
 
-    fn get_parameters(&self) -> Vec<EffectParameter> {
+impl UserParameters for Gain {
+    fn get_parameters(&self) -> Vec<Parameter> {
         self.parameters.clone()
     }
 
-    fn update_parameter(
-        &mut self,
-        index: usize,
-        change: ParameterChange,
-    ) -> Option<EffectParameter> {
+    fn update_parameter(&mut self, index: usize, change: ParameterChange) -> Option<Parameter> {
         let param = self.parameters.get(index)?;
         let delta = match change {
             Increment => param.delta,
             Decrement => -param.delta,
         };
-        param.set_value(param.get_value() + delta);
+        param.set_value((param.get_value() + delta).clamp(param.range.0, param.range.1));
 
         Some(param.clone())
     }

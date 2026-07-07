@@ -3,6 +3,7 @@ mod fm_synth;
 mod instrument;
 mod note;
 mod oscillator;
+mod parameter;
 mod ui;
 mod utils;
 mod voices;

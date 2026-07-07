@@ -1,7 +1,7 @@
-use crate::effects::ParameterChange::{Decrement, Increment};
-use crate::fm_synth::{FMSynth, FreqRatio};
+use crate::fm_synth::FMSynth;
 use crate::instrument::Instrument;
 use crate::note::Note;
+use crate::parameter::ParameterChange::{Decrement, Increment};
 use crate::utils::{A440, get_freq_for_note};
 use crossterm::{
     event::{
@@ -21,7 +21,6 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 use rodio::MixerDeviceSink;
-use std::f32::consts::PI;
 use std::{io::Result, sync::atomic::Ordering};
 
 const BLACK_KEYS: &[char] = &['2', '3', '4', ' ', '6', '7', ' ', '9', '0', '-'];
@@ -120,7 +119,7 @@ pub struct UI {
 
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
-        let instrument = Instrument::new(FMSynth::new(FreqRatio(2.0, 1.0), PI));
+        let instrument = Instrument::new(FMSynth::new());
         let effect_count = instrument.effects.len();
         let column_count = effect_count.min(3);
         let row_count = effect_count.div_ceil(column_count);

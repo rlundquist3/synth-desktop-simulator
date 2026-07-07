@@ -14,7 +14,6 @@ pub struct Oscillator {
     pub freq: f32,
     phase: f32,
     phase_delta: f32,
-    last_sample: f32,
 }
 
 impl Oscillator {
@@ -24,7 +23,6 @@ impl Oscillator {
             freq: 0.0,
             phase: 0.0,
             phase_delta: 0.0,
-            last_sample: 0.0,
         }
     }
 
@@ -42,13 +40,23 @@ impl Oscillator {
         self.phase
     }
 
+    pub fn next_phase_with_mod(&mut self, modulation: f32) -> f32 {
+        let delta = self.freq * (1.0 + modulation) * 2.0 * PI / (SAMPLE_RATE as f32);
+        self.phase += delta;
+
+        if self.phase >= 2.0 * PI {
+            self.phase -= 2.0 * PI;
+        }
+
+        self.phase
+    }
+
     pub fn next_sample(&mut self) -> f32 {
         self.next_phase();
 
-        self.last_sample = match self.waveform {
+        match self.waveform {
             Sine => self.phase.sin(),
-        };
-        self.last_sample
+        }
     }
 }
 
