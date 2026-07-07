@@ -1,7 +1,7 @@
 use rodio::Source;
 use std::{f32::consts::PI, num::NonZero, time::Duration};
 
-use crate::SAMPLE_RATE;
+use crate::{SAMPLE_RATE, note::Note};
 
 #[derive(Clone, Debug)]
 pub enum Waveform {
@@ -50,6 +50,12 @@ impl Oscillator {
             Sine => self.phase.sin(),
         };
         self.last_sample
+    }
+}
+
+impl Note for Oscillator {
+    fn set_freq(&mut self, freq: f32) {
+        self.set_freq(freq);
     }
 }
 

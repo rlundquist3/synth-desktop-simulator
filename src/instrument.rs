@@ -11,23 +11,31 @@ use crate::SAMPLE_RATE;
 use crate::effects::Effect;
 use crate::effects::echo::Echo;
 use crate::effects::gain::Gain;
-use crate::oscillator::Oscillator;
-use crate::oscillator::Waveform;
+use crate::note::Note;
 use crate::voices::Voices;
 
-#[derive(Clone, Debug)]
-pub struct Voice {
-    pub osc: Arc<Mutex<Oscillator>>,
+#[derive(Debug)]
+pub struct Voice<T> {
+    pub note: Arc<Mutex<T>>,
     pub on: Arc<AtomicBool>,
 }
 
-impl Iterator for Voices<Voice> {
+impl<T> Clone for Voice<T> {
+    fn clone(&self) -> Self {
+        Voice {
+            note: Arc::clone(&self.note),
+            on: Arc::clone(&self.on),
+        }
+    }
+}
+
+impl<T: Note> Iterator for Voices<Voice<T>> {
     type Item = f32;
 
     fn next(&mut self) -> Option<f32> {
         Some(self.voices.iter_mut().fold(0.0, |acc: f32, v| {
             if v.on.load(Ordering::Relaxed) {
-                acc + v.osc.lock().unwrap().next().unwrap_or(0.0)
+                acc + v.note.lock().unwrap().next().unwrap_or(0.0)
             } else {
                 acc
             }
@@ -36,13 +44,13 @@ impl Iterator for Voices<Voice> {
 }
 
 #[derive(Debug)]
-pub struct Instrument {
-    pub voices: Voices<Voice>,
+pub struct Instrument<T> {
+    pub voices: Voices<Voice<T>>,
     pub headroom_gain: Box<dyn Effect>,
     pub effects: Vec<Box<dyn Effect>>,
 }
 
-impl Clone for Instrument {
+impl<T> Clone for Instrument<T> {
     fn clone(&self) -> Self {
         Instrument {
             voices: self.voices.clone(),
@@ -52,19 +60,19 @@ impl Clone for Instrument {
     }
 }
 
-impl Instrument {
-    pub fn new(waveform: Waveform) -> Self {
+impl<T: Note> Instrument<T> {
+    pub fn new(notes: Vec<T>) -> Self {
         let voices = Voices::new(
-            (0..5)
-                .map(|_| Voice {
-                    osc: Arc::new(Mutex::new(Oscillator::new(waveform.clone()))),
+            notes
+                .into_iter()
+                .map(|n| Voice {
+                    note: Arc::new(Mutex::new(n)),
                     on: Arc::new(AtomicBool::new(false)),
                 })
                 .collect(),
         );
 
         let mut effects: Vec<Box<dyn Effect>> = Vec::new();
-
         effects.push(Box::new(Echo::new(0, 0.0)));
 
         Instrument {
@@ -75,7 +83,7 @@ impl Instrument {
     }
 }
 
-impl Iterator for Instrument {
+impl<T: Note> Iterator for Instrument<T> {
     type Item = f32;
 
     fn next(&mut self) -> Option<f32> {
@@ -91,7 +99,7 @@ impl Iterator for Instrument {
     }
 }
 
-impl Source for Instrument {
+impl<T: Note> Source for Instrument<T> {
     fn channels(&self) -> NonZero<u16> {
         NonZero::new(1).unwrap()
     }

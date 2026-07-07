@@ -1,8 +1,9 @@
 use rodio::Source;
-use std::{f32::consts::PI, num::NonZero, time::Duration};
+use std::{num::NonZero, time::Duration};
 
 use crate::{
     SAMPLE_RATE,
+    note::Note,
     oscillator::{Oscillator, Waveform::Sine},
 };
 
@@ -13,7 +14,6 @@ pub struct FreqRatio(pub f32, pub f32);
 pub struct FMSynth {
     freq_ratio: FreqRatio,
     mod_index: f32,
-    // mod_amp: f32,
     carrier_amp: f32,
     carrier_osc: Oscillator,
     mod_osc: Oscillator,
@@ -24,7 +24,6 @@ impl FMSynth {
         FMSynth {
             freq_ratio,
             mod_index,
-            // mod_amp: 1.0,
             carrier_amp: 1.0, // TODO: setter for carrier amp?
             carrier_osc: Oscillator::new(Sine),
             mod_osc: Oscillator::new(Sine),
@@ -38,6 +37,12 @@ impl FMSynth {
 
     fn get_mod_amp(self) -> f32 {
         self.mod_index * self.mod_osc.freq
+    }
+}
+
+impl Note for FMSynth {
+    fn set_freq(&mut self, freq: f32) {
+        self.set_fundamental_freq(freq);
     }
 }
 

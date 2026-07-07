@@ -1,7 +1,7 @@
 mod effects;
 mod fm_synth;
 mod instrument;
-mod instrument_fm;
+mod note;
 mod oscillator;
 mod ui;
 mod utils;

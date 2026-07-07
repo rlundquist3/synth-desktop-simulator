@@ -1,8 +1,7 @@
 use crate::effects::ParameterChange::{Decrement, Increment};
-// use crate::instrument;
-// use crate::instrument::Instrument;
-use crate::instrument_fm::InstrumentFM;
-// use crate::oscillator::Waveform::Sine;
+use crate::fm_synth::{FMSynth, FreqRatio};
+use crate::instrument::Instrument;
+use crate::note::Note;
 use crate::utils::{A440, get_freq_for_note};
 use crossterm::{
     event::{
@@ -22,6 +21,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 use rodio::MixerDeviceSink;
+use std::f32::consts::PI;
 use std::{io::Result, sync::atomic::Ordering};
 
 const BLACK_KEYS: &[char] = &['2', '3', '4', ' ', '6', '7', ' ', '9', '0', '-'];
@@ -111,7 +111,7 @@ impl EffectSection {
 #[derive(Debug)]
 pub struct UI {
     audio_device: MixerDeviceSink,
-    instrument: InstrumentFM,
+    instrument: Instrument<FMSynth>,
     last_key: char,
     last_freq: String,
     effect_section: EffectSection,
@@ -120,8 +120,11 @@ pub struct UI {
 
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
-        // let instrument = Instrument::new(Sine);
-        let instrument = InstrumentFM::new();
+        let instrument = Instrument::new(
+            (0..5)
+                .map(|_| FMSynth::new(FreqRatio(2.0, 1.0), PI))
+                .collect(),
+        );
         let effect_count = instrument.effects.len();
         let column_count = effect_count.min(3);
         let row_count = effect_count.div_ceil(column_count);
@@ -206,8 +209,7 @@ impl UI {
                 self.last_key = pressed_key;
                 self.last_freq = format!("{freq}");
                 let voice = self.instrument.voices.voice_on(pressed_key);
-                // voice.osc.lock().unwrap().set_freq(freq);
-                voice.synth.lock().unwrap().set_fundamental_freq(freq);
+                voice.note.lock().unwrap().set_freq(freq);
                 voice.on.store(true, Ordering::Relaxed);
             }
         }
