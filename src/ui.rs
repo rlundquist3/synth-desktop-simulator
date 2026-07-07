@@ -396,7 +396,7 @@ impl Widget for &UI {
                 let (name, parameters) = match i {
                     0 => (String::from("FM"), self.instrument.get_parameters()),
                     _ => {
-                        let effect = &self.instrument.effects[i];
+                        let effect = &self.instrument.effects[i - 1];
                         (effect.get_name(), effect.get_parameters())
                     }
                 };
