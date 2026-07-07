@@ -1,7 +1,9 @@
 use crate::fm_synth::FMSynth;
-use crate::instrument::Instrument;
+use crate::fm_synth_instrument::FMSynthInstrument;
+use crate::generic_instrument::Instrument;
 use crate::note::Note;
 use crate::parameter::ParameterChange::{Decrement, Increment};
+use crate::parameter::UserParameters;
 use crate::utils::{A440, get_freq_for_note};
 use crossterm::{
     event::{
@@ -31,7 +33,7 @@ const ALL_KEYS: &[char] = &[
 ];
 
 #[derive(Debug)]
-struct EffectSection {
+struct Controls {
     row_count: usize,
     column_count: usize,
     total_count: usize,
@@ -40,9 +42,9 @@ struct EffectSection {
     param_focus_index: usize,
 }
 
-impl EffectSection {
+impl Controls {
     pub fn new(row_count: usize, column_count: usize) -> Self {
-        EffectSection {
+        Controls {
             row_count,
             column_count,
             total_count: row_count * column_count,
@@ -110,26 +112,26 @@ impl EffectSection {
 #[derive(Debug)]
 pub struct UI {
     audio_device: MixerDeviceSink,
-    instrument: Instrument<FMSynth>,
+    instrument: FMSynthInstrument,
     last_key: char,
     last_freq: String,
-    effect_section: EffectSection,
+    controls_interface: Controls,
     exit: bool,
 }
 
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
-        let instrument = Instrument::new(FMSynth::new());
-        let effect_count = instrument.effects.len();
-        let column_count = effect_count.min(3);
-        let row_count = effect_count.div_ceil(column_count);
+        let instrument = FMSynthInstrument::new();
+        let control_count = 1 + instrument.effects.len(); // instrument controls + effects
+        let column_count = control_count.min(3);
+        let row_count = control_count.div_ceil(column_count);
 
         UI {
             audio_device: audio_device,
             instrument,
             last_key: '_',
             last_freq: String::from("_"),
-            effect_section: EffectSection::new(row_count, column_count),
+            controls_interface: Controls::new(row_count, column_count),
             exit: false,
         }
     }
@@ -209,38 +211,64 @@ impl UI {
             }
         }
 
-        if self.effect_section.is_editing {
-            let effect = &mut self.instrument.effects[self.effect_section.focus_index];
-            let params = effect.get_parameters();
-            let param_index = self.effect_section.param_focus_index;
+        if self.controls_interface.is_editing {
+            let param_index = self.controls_interface.param_focus_index;
 
-            match key_event.code {
-                KeyCode::Esc => self.effect_section.deselect(),
-                KeyCode::Left => {
-                    if param_index > 0 {
-                        self.effect_section.param_focus_index -= 1;
+            if self.controls_interface.focus_index == 0 {
+                let params = self.instrument.get_parameters();
+
+                match key_event.code {
+                    KeyCode::Esc => self.controls_interface.deselect(),
+                    KeyCode::Left => {
+                        if param_index > 0 {
+                            self.controls_interface.param_focus_index -= 1;
+                        }
                     }
-                }
-                KeyCode::Right => {
-                    if param_index < params.len() - 1 {
-                        self.effect_section.param_focus_index += 1;
+                    KeyCode::Right => {
+                        if param_index < params.len() - 1 {
+                            self.controls_interface.param_focus_index += 1;
+                        }
                     }
+                    KeyCode::Up => {
+                        self.instrument.update_parameter(param_index, Increment);
+                    }
+                    KeyCode::Down => {
+                        self.instrument.update_parameter(param_index, Decrement);
+                    }
+                    _ => (),
                 }
-                KeyCode::Up => {
-                    effect.update_parameter(param_index, Increment);
+            } else {
+                let effect = &mut self.instrument.effects[self.controls_interface.focus_index + 1];
+                let params = effect.get_parameters();
+
+                match key_event.code {
+                    KeyCode::Esc => self.controls_interface.deselect(),
+                    KeyCode::Left => {
+                        if param_index > 0 {
+                            self.controls_interface.param_focus_index -= 1;
+                        }
+                    }
+                    KeyCode::Right => {
+                        if param_index < params.len() - 1 {
+                            self.controls_interface.param_focus_index += 1;
+                        }
+                    }
+                    KeyCode::Up => {
+                        effect.update_parameter(param_index, Increment);
+                    }
+                    KeyCode::Down => {
+                        effect.update_parameter(param_index, Decrement);
+                    }
+                    _ => (),
                 }
-                KeyCode::Down => {
-                    effect.update_parameter(param_index, Decrement);
-                }
-                _ => (),
             }
         } else {
             match key_event.code {
-                KeyCode::Enter => self.effect_section.select(),
-                KeyCode::Left => self.effect_section.move_left(),
-                KeyCode::Right => self.effect_section.move_right(),
-                KeyCode::Up => self.effect_section.move_up(),
-                KeyCode::Down => self.effect_section.move_down(),
+                KeyCode::Enter => self.controls_interface.select(),
+                KeyCode::Left => self.controls_interface.move_left(),
+                KeyCode::Right => self.controls_interface.move_right(),
+                KeyCode::Up => self.controls_interface.move_up(),
+                KeyCode::Down => self.controls_interface.move_down(),
                 _ => (),
             }
         }
@@ -277,10 +305,10 @@ impl Widget for &UI {
             .flex(Flex::SpaceBetween);
 
         let inner_rows =
-            Layout::vertical((0..self.effect_section.row_count).map(|_| Constraint::Length(7)))
+            Layout::vertical((0..self.controls_interface.row_count).map(|_| Constraint::Length(7)))
                 .spacing(1);
         let inner_columns = Layout::horizontal(
-            (0..self.effect_section.column_count).map(|_| Constraint::Length(18)),
+            (0..self.controls_interface.column_count).map(|_| Constraint::Length(18)),
         );
 
         let outer_cells = outer_columns.split(inner_area);
@@ -348,15 +376,15 @@ impl Widget for &UI {
             .block(Block::bordered())
             .render(outer_cells[0], buf);
 
-        // render controls
+        // render controls_interface
         let control_rows = inner_rows.split(outer_cells[1]);
         let control_cells = control_rows
             .iter()
             .flat_map(|&row| inner_columns.split(row).to_vec());
 
         for (i, cell) in control_cells.enumerate() {
-            let container = if i == self.effect_section.focus_index {
-                match self.effect_section.is_editing {
+            let container = if i == self.controls_interface.focus_index {
+                match self.controls_interface.is_editing {
                     true => Block::bordered().on_green(),
                     false => Block::bordered().on_blue(),
                 }
@@ -364,9 +392,14 @@ impl Widget for &UI {
                 Block::bordered()
             };
 
-            if i < self.instrument.effects.len() {
-                let effect = &self.instrument.effects[i];
-                let parameters = effect.get_parameters();
+            if i < self.instrument.effects.len() + 1 {
+                let (name, parameters) = match i {
+                    0 => (String::from("FM"), self.instrument.get_parameters()),
+                    _ => {
+                        let effect = &self.instrument.effects[i];
+                        (effect.get_name(), effect.get_parameters())
+                    }
+                };
 
                 let inner_cell = container.inner(cell);
                 container.render(cell, buf);
@@ -377,15 +410,13 @@ impl Widget for &UI {
                     Layout::horizontal((0..parameters.len()).map(|_| Constraint::Length(9)));
 
                 let effect_rows = effect_row_constraints.split(inner_cell);
-                Paragraph::new(effect.get_name())
-                    .centered()
-                    .render(effect_rows[0], buf);
+                Paragraph::new(name).centered().render(effect_rows[0], buf);
                 let parameter_cells = parameter_columns.split(effect_rows[1]);
 
                 for (j, c) in parameter_cells.iter().enumerate() {
-                    let container = if self.effect_section.is_editing
-                        && i == self.effect_section.focus_index
-                        && j == self.effect_section.param_focus_index
+                    let container = if self.controls_interface.is_editing
+                        && i == self.controls_interface.focus_index
+                        && j == self.controls_interface.param_focus_index
                     {
                         Block::new().on_cyan()
                     } else {
@@ -400,11 +431,6 @@ impl Widget for &UI {
                     .block(container)
                     .render(*c, buf);
                 }
-            } else {
-                Paragraph::new(format!("Effect {:02}", i + 1))
-                    .centered()
-                    .block(container)
-                    .render(cell, buf);
             }
         }
     }
