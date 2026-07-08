@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use crate::{SAMPLE_RATE, note::Note};
+use crate::{SAMPLE_RATE, voices::Voice};
 
 #[derive(Clone, Debug)]
 pub enum Waveform {
@@ -60,7 +60,7 @@ impl Oscillator {
     }
 }
 
-impl Note for Oscillator {
+impl Voice for Oscillator {
     fn set_freq(&mut self, freq: f32) {
         self.set_freq(freq);
     }

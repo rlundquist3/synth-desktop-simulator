@@ -1,12 +1,12 @@
-use std::f32::consts::PI;
-
 use crate::{
     fm_synth_instrument::FreqRatio,
-    note::Note,
     oscillator::{Oscillator, Waveform::Sine},
+    voices::Voice,
 };
+use std::f32::consts::PI;
+use std::sync::{Arc, atomic::AtomicBool};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct FMSynth {
     freq_ratio: FreqRatio,
     mod_index: f32,
@@ -15,6 +15,8 @@ pub struct FMSynth {
     mod_osc: Oscillator,
     lfo_amp: f32,
     lfo: Oscillator,
+    pub on: Arc<AtomicBool>,
+    // add envelope property here
 }
 
 impl FMSynth {
@@ -30,6 +32,7 @@ impl FMSynth {
             mod_osc: Oscillator::new(Sine),
             lfo_amp: 0.0,
             lfo,
+            on: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -63,7 +66,22 @@ impl FMSynth {
     // }
 }
 
-impl Note for FMSynth {
+impl Clone for FMSynth {
+    fn clone(&self) -> Self {
+        FMSynth {
+            freq_ratio: self.freq_ratio,
+            mod_index: self.mod_index,
+            carrier_amp: self.carrier_amp,
+            carrier_osc: self.carrier_osc.clone(),
+            mod_osc: self.mod_osc.clone(),
+            lfo_amp: self.lfo_amp,
+            lfo: self.lfo.clone(),
+            on: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
+impl Voice for FMSynth {
     fn set_freq(&mut self, freq: f32) {
         self.set_fundamental_freq(freq);
     }
@@ -80,6 +98,7 @@ impl Iterator for FMSynth {
             .next_phase_with_mod(self.lfo_amp * lfo_sample);
         let m = self.mod_osc.next_phase();
 
+        // multiply by envelope value
         Some(self.carrier_amp * (c + self.mod_index * m.sin()).sin())
     }
 }

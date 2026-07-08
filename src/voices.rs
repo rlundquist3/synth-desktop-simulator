@@ -1,5 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 
+pub trait Voice: Clone + Send + Iterator<Item = f32> {
+    fn set_freq(&mut self, freq: f32);
+}
+
 #[derive(Clone, Debug)]
 pub struct Voices<T> {
     pub voices: Vec<T>,

@@ -2,10 +2,7 @@ use std::f32::consts::PI;
 use std::fmt::Debug;
 use std::num::NonZero;
 
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::{Arc, Mutex, atomic::Ordering};
 use std::time::Duration;
 
 use rodio::Source;
@@ -22,45 +19,16 @@ use crate::parameter::{
 };
 use crate::voices::Voices;
 
-const MOD_INDEX_OPTIONS: &[f32] = &[1.0, 2.0, 3.0, PI, 4.0, 5.0, 2.0 * PI];
-const MOD_INDEX_RENDER: &[&str] = &["1", "2", "3", "π", "4", "5", "2π"];
+const MOD_INDEX_OPTIONS: &[f32] = &[1.0, 2.0, PI, 4.0, 5.0, 2.0 * PI];
+const MOD_INDEX_RENDER: &[&str] = &["1", "2", "π", "4", "5", "2π"];
 
 #[derive(Clone, Copy, Debug)]
 pub struct FreqRatio(pub f32, pub f32);
 
 #[derive(Debug)]
-pub struct Voice {
-    pub note: Arc<Mutex<FMSynth>>,
-    pub on: Arc<AtomicBool>,
-}
-
-impl Clone for Voice {
-    fn clone(&self) -> Self {
-        Voice {
-            note: Arc::clone(&self.note),
-            on: Arc::clone(&self.on),
-        }
-    }
-}
-
-impl Iterator for Voices<Voice> {
-    type Item = f32;
-
-    fn next(&mut self) -> Option<f32> {
-        Some(self.voices.iter_mut().fold(0.0, |acc: f32, v| {
-            if v.on.load(Ordering::Relaxed) {
-                acc + v.note.lock().unwrap().next().unwrap_or(0.0)
-            } else {
-                acc
-            }
-        }))
-    }
-}
-
-#[derive(Debug)]
 pub struct FMSynthInstrument {
-    pub voices: Voices<Voice>,
-    pub headroom_gain: Box<dyn Effect>,
+    pub voices: Voices<Arc<Mutex<FMSynth>>>,
+    headroom_gain: Box<dyn Effect>,
     pub effects: Vec<Box<dyn Effect>>,
     parameters: Vec<Parameter>,
 }
@@ -70,10 +38,7 @@ impl FMSynthInstrument {
         let signal_source = FMSynth::new();
         let voices = Voices::new(
             (0..5)
-                .map(|_| Voice {
-                    note: Arc::new(Mutex::new(signal_source.clone())),
-                    on: Arc::new(AtomicBool::new(false)),
-                })
+                .map(|_| Arc::new(Mutex::new(signal_source.clone())))
                 .collect(),
         );
 
@@ -128,6 +93,22 @@ impl Iterator for FMSynthInstrument {
     }
 }
 
+impl Iterator for Voices<Arc<Mutex<FMSynth>>> {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        Some(self.voices.iter_mut().fold(0.0, |acc: f32, v| {
+            let mut voice = v.lock().unwrap();
+
+            if voice.on.load(Ordering::Relaxed) {
+                acc + voice.next().unwrap_or(0.0)
+            } else {
+                acc
+            }
+        }))
+    }
+}
+
 impl UserParameters for FMSynthInstrument {
     fn get_parameters(&self) -> Vec<Parameter> {
         self.parameters.clone()
@@ -146,17 +127,17 @@ impl UserParameters for FMSynthInstrument {
         match index {
             0 => {
                 self.voices.voices.iter().for_each(|voice| {
-                    let mut note = voice.note.lock().unwrap();
-                    let existing = note.get_freq_ratio();
-                    note.set_freq_ratio(FreqRatio(updated_value, existing.1))
+                    let mut v = voice.lock().unwrap();
+                    let existing = v.get_freq_ratio();
+                    v.set_freq_ratio(FreqRatio(updated_value, existing.1))
                 });
                 Some(param.clone())
             }
             1 => {
                 self.voices.voices.iter().for_each(|voice| {
-                    let mut note = voice.note.lock().unwrap();
-                    let existing = note.get_freq_ratio();
-                    note.set_freq_ratio(FreqRatio(existing.0, updated_value))
+                    let mut v = voice.lock().unwrap();
+                    let existing = v.get_freq_ratio();
+                    v.set_freq_ratio(FreqRatio(existing.0, updated_value))
                 });
                 Some(param.clone())
             }
@@ -165,21 +146,21 @@ impl UserParameters for FMSynthInstrument {
                 self.voices
                     .voices
                     .iter()
-                    .for_each(|voice| voice.note.lock().unwrap().set_mod_index(mod_index));
+                    .for_each(|voice| voice.lock().unwrap().set_mod_index(mod_index));
                 Some(param.clone())
             }
             3 => {
                 self.voices
                     .voices
                     .iter()
-                    .for_each(|voice| voice.note.lock().unwrap().set_lfo_amp(updated_value));
+                    .for_each(|voice| voice.lock().unwrap().set_lfo_amp(updated_value));
                 Some(param.clone())
             }
             4 => {
                 self.voices
                     .voices
                     .iter()
-                    .for_each(|voice| voice.note.lock().unwrap().set_lfo_freq(updated_value));
+                    .for_each(|voice| voice.lock().unwrap().set_lfo_freq(updated_value));
                 Some(param.clone())
             }
             _ => None,

@@ -1,10 +1,8 @@
-use crate::fm_synth::FMSynth;
 use crate::fm_synth_instrument::FMSynthInstrument;
-use crate::generic_instrument::Instrument;
-use crate::note::Note;
 use crate::parameter::ParameterChange::{Decrement, Increment};
 use crate::parameter::UserParameters;
 use crate::utils::{A440, get_freq_for_note};
+use crate::voices::Voice;
 use crossterm::{
     event::{
         self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
@@ -12,7 +10,6 @@ use crossterm::{
     },
     execute,
 };
-use ratatui::layout::Constraint::Length;
 use ratatui::layout::{Constraint, Flex, Layout};
 use ratatui::{
     DefaultTerminal, Frame,
@@ -212,8 +209,8 @@ impl UI {
             if let Some(pressed_key) = key_event.code.as_char() {
                 self.last_key = pressed_key;
                 self.last_freq = format!("{freq}");
-                let voice = self.instrument.voices.voice_on(pressed_key);
-                voice.note.lock().unwrap().set_freq(freq);
+                let mut voice = self.instrument.voices.voice_on(pressed_key).lock().unwrap();
+                voice.set_freq(freq);
                 voice.on.store(true, Ordering::Relaxed);
             }
         }
@@ -285,7 +282,7 @@ impl UI {
         if let Some(k) = key_event.code.as_char() {
             if ALL_KEYS.contains(&k) {
                 if let Some(voice) = self.instrument.voices.voice_off(k) {
-                    voice.on.store(false, Ordering::Relaxed);
+                    voice.lock().unwrap().on.store(false, Ordering::Relaxed);
                 }
             }
         }

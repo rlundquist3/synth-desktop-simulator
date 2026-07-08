@@ -1,8 +1,6 @@
 mod effects;
 mod fm_synth;
 mod fm_synth_instrument;
-mod generic_instrument;
-mod note;
 mod oscillator;
 mod parameter;
 mod ui;
