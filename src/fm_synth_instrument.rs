@@ -122,10 +122,20 @@ impl Iterator for Voices<Arc<Mutex<FMSynth>>> {
 
 impl UserParameters for FMSynthInstrument {
     fn get_parameters(&self) -> Vec<Parameter> {
-        self.parameters.clone()
+        self.parameters
+            .iter()
+            .cloned()
+            .chain(self.envelope.get_parameters())
+            .collect()
     }
 
     fn update_parameter(&mut self, index: usize, change: ParameterChange) -> Option<Parameter> {
+        let synth_param_count = self.parameters.len();
+
+        if index >= synth_param_count {
+            return self.envelope.update_parameter(index - synth_param_count, change);
+        }
+
         let param = self.parameters.get(index)?;
         let delta = match change {
             Increment => param.delta,

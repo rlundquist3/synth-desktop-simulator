@@ -427,7 +427,7 @@ impl Widget for &UI {
         };
 
         // instrument row
-        let instrument_cell = Layout::horizontal([Constraint::Max(50), Constraint::Fill(1)])
+        let instrument_cell = Layout::horizontal([Constraint::Max(80), Constraint::Fill(1)])
             .split(right_sections[0])[0];
         render_control_cell(
             0,
