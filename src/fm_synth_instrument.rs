@@ -43,7 +43,7 @@ impl FMSynthInstrument {
         );
 
         let mut effects: Vec<Box<dyn Effect>> = Vec::new();
-        effects.push(Box::new(Echo::new(0, 0.0)));
+        effects.push(Box::new(Echo::new(0.0, 0.0)));
 
         FMSynthInstrument {
             voices,
@@ -52,7 +52,7 @@ impl FMSynthInstrument {
                 Parameter::new("M", 1.0, 1.0, (1.0, 10.0), |v| format!("{:.0}", v)),
                 Parameter::new(
                     "Mod Idx",
-                    3.0,
+                    2.0,
                     1.0,
                     (0.0, (MOD_INDEX_OPTIONS.len() - 1) as f32),
                     |v| format!("{}", MOD_INDEX_RENDER[v as usize]),
@@ -101,6 +101,12 @@ impl Iterator for Voices<Arc<Mutex<FMSynth>>> {
             let mut voice = v.lock().unwrap();
 
             if voice.on.load(Ordering::Relaxed) {
+                acc + voice.next().unwrap_or(0.0)
+            } else if !voice.get_release_complete() {
+                if !voice.get_releasing() {
+                    voice.set_should_release();
+                }
+
                 acc + voice.next().unwrap_or(0.0)
             } else {
                 acc

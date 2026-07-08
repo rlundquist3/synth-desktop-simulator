@@ -1,4 +1,3 @@
-pub mod amp_envelope;
 pub mod echo;
 pub mod gain;
 

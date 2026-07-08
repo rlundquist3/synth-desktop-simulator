@@ -1,4 +1,5 @@
 use crate::{
+    amp_envelope::AmpEnvelope,
     fm_synth_instrument::FreqRatio,
     oscillator::{Oscillator, Waveform::Sine},
     voices::Voice,
@@ -15,8 +16,9 @@ pub struct FMSynth {
     mod_osc: Oscillator,
     lfo_amp: f32,
     lfo: Oscillator,
+    envelope: AmpEnvelope,
+
     pub on: Arc<AtomicBool>,
-    // add envelope property here
 }
 
 impl FMSynth {
@@ -32,6 +34,7 @@ impl FMSynth {
             mod_osc: Oscillator::new(Sine),
             lfo_amp: 0.0,
             lfo,
+            envelope: AmpEnvelope::new(0.3, 0.2, 0.8, 0.8),
             on: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -61,6 +64,18 @@ impl FMSynth {
         self.lfo.set_freq(freq);
     }
 
+    pub fn set_should_release(&mut self) {
+        self.envelope.set_should_release();
+    }
+
+    pub fn get_releasing(&self) -> bool {
+        self.envelope.get_releasing()
+    }
+
+    pub fn get_release_complete(&self) -> bool {
+        self.envelope.get_release_complete()
+    }
+
     // fn get_mod_amp(self) -> f32 {
     //     self.mod_index * self.mod_osc.freq
     // }
@@ -76,6 +91,7 @@ impl Clone for FMSynth {
             mod_osc: self.mod_osc.clone(),
             lfo_amp: self.lfo_amp,
             lfo: self.lfo.clone(),
+            envelope: self.envelope.clone(),
             on: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -98,7 +114,11 @@ impl Iterator for FMSynth {
             .next_phase_with_mod(self.lfo_amp * lfo_sample);
         let m = self.mod_osc.next_phase();
 
-        // multiply by envelope value
-        Some(self.carrier_amp * (c + self.mod_index * m.sin()).sin())
+        let envelope_amp = match self.envelope.next() {
+            Some(amp) => amp,
+            None => 1.0,
+        };
+
+        Some(envelope_amp * self.carrier_amp * (c + self.mod_index * m.sin()).sin())
     }
 }

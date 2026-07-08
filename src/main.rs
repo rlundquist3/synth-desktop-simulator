@@ -1,3 +1,4 @@
+mod amp_envelope;
 mod effects;
 mod fm_synth;
 mod fm_synth_instrument;
