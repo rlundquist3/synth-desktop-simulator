@@ -8,6 +8,7 @@ use std::time::Duration;
 use rodio::Source;
 
 use crate::SAMPLE_RATE;
+use crate::amp_envelope::AmpEnvelope;
 use crate::effects::Effect;
 use crate::effects::echo::Echo;
 use crate::effects::gain::Gain;
@@ -29,13 +30,15 @@ pub struct FreqRatio(pub f32, pub f32);
 pub struct FMSynthInstrument {
     pub voices: Voices<Arc<Mutex<FMSynth>>>,
     headroom_gain: Box<dyn Effect>,
-    pub effects: Vec<Box<dyn Effect>>,
+    envelope: AmpEnvelope,
     parameters: Vec<Parameter>,
+    pub effects: Vec<Box<dyn Effect>>,
 }
 
 impl FMSynthInstrument {
     pub fn new() -> Self {
-        let signal_source = FMSynth::new();
+        let envelope = AmpEnvelope::new(0.3, 0.2, 0.8, 0.8);
+        let signal_source = FMSynth::new(envelope.clone());
         let voices = Voices::new(
             (0..5)
                 .map(|_| Arc::new(Mutex::new(signal_source.clone())))
@@ -61,6 +64,7 @@ impl FMSynthInstrument {
                 Parameter::new("LFO Freq", 0.0, 1.0, (0.0, 20.0), |v| format!("{:.0}Hz", v)),
             ],
             headroom_gain: Box::new(Gain::new(-16.0)),
+            envelope,
             effects,
         }
     }
@@ -72,6 +76,7 @@ impl Clone for FMSynthInstrument {
             voices: self.voices.clone(),
             parameters: self.parameters.clone(),
             headroom_gain: self.headroom_gain.clone_box(),
+            envelope: self.envelope.clone(),
             effects: self.effects.iter().map(|e| e.clone_box()).collect(),
         }
     }

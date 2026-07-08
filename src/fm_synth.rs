@@ -22,7 +22,7 @@ pub struct FMSynth {
 }
 
 impl FMSynth {
-    pub fn new() -> Self {
+    pub fn new(envelope: AmpEnvelope) -> Self {
         let mut lfo = Oscillator::new(Sine);
         lfo.set_freq(0.0);
 
@@ -34,7 +34,7 @@ impl FMSynth {
             mod_osc: Oscillator::new(Sine),
             lfo_amp: 0.0,
             lfo,
-            envelope: AmpEnvelope::new(0.3, 0.2, 0.8, 0.8),
+            envelope,
             on: Arc::new(AtomicBool::new(false)),
         }
     }
