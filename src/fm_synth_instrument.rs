@@ -23,6 +23,7 @@ use crate::parameter::{
 use crate::voices::Voices;
 
 const MOD_INDEX_OPTIONS: &[f32] = &[1.0, 2.0, 3.0, PI, 4.0, 5.0, 2.0 * PI];
+const MOD_INDEX_RENDER: &[&str] = &["1", "2", "3", "π", "4", "5", "2π"];
 
 #[derive(Clone, Copy, Debug)]
 pub struct FreqRatio(pub f32, pub f32);
@@ -64,17 +65,6 @@ pub struct FMSynthInstrument {
     parameters: Vec<Parameter>,
 }
 
-impl Clone for FMSynthInstrument {
-    fn clone(&self) -> Self {
-        FMSynthInstrument {
-            voices: self.voices.clone(),
-            parameters: self.parameters.clone(),
-            headroom_gain: self.headroom_gain.clone_box(),
-            effects: self.effects.iter().map(|e| e.clone_box()).collect(),
-        }
-    }
-}
-
 impl FMSynthInstrument {
     pub fn new() -> Self {
         let signal_source = FMSynth::new();
@@ -93,14 +83,31 @@ impl FMSynthInstrument {
         FMSynthInstrument {
             voices,
             parameters: vec![
-                Parameter::new("C", 1.0, 1.0, (1.0, 10.0)),
-                Parameter::new("M", 1.0, 1.0, (1.0, 10.0)),
-                Parameter::new("Mod Index", 3.0, 1.0, (1.0, MOD_INDEX_OPTIONS.len() as f32)),
-                Parameter::new("LFO Amp", 0.0, 0.1, (0.0, 5.0)),
-                Parameter::new("LFO Freq", 0.0, 1.0, (0.0, 20.0)),
+                Parameter::new("C", 1.0, 1.0, (1.0, 10.0), |v| format!("{:.0}", v)),
+                Parameter::new("M", 1.0, 1.0, (1.0, 10.0), |v| format!("{:.0}", v)),
+                Parameter::new(
+                    "Mod Idx",
+                    3.0,
+                    1.0,
+                    (0.0, (MOD_INDEX_OPTIONS.len() - 1) as f32),
+                    |v| format!("{}", MOD_INDEX_RENDER[v as usize]),
+                ),
+                Parameter::new("LFO Amp", 0.0, 0.1, (0.0, 5.0), |v| format!("{:.1}", v)),
+                Parameter::new("LFO Freq", 0.0, 1.0, (0.0, 20.0), |v| format!("{:.0}Hz", v)),
             ],
             headroom_gain: Box::new(Gain::new(-16.0)),
             effects,
+        }
+    }
+}
+
+impl Clone for FMSynthInstrument {
+    fn clone(&self) -> Self {
+        FMSynthInstrument {
+            voices: self.voices.clone(),
+            parameters: self.parameters.clone(),
+            headroom_gain: self.headroom_gain.clone_box(),
+            effects: self.effects.iter().map(|e| e.clone_box()).collect(),
         }
     }
 }

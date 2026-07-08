@@ -26,8 +26,10 @@ impl Echo {
             buffer: vec![0.0; max_samples],
             write_index: 0,
             parameters: vec![
-                Parameter::new("Delay", delay_secs, 0.1, (0.0, 1.0)),
-                Parameter::new("Amp", amp, 0.1, (0.0, 1.0)),
+                Parameter::new("Delay", delay_secs, 0.1, (0.0, 1.0), |v| {
+                    format!("{:.1}s", v)
+                }),
+                Parameter::new("Amp", amp, 0.1, (0.0, 1.0), |v| format!("{:.1}", v)),
             ],
         }
     }

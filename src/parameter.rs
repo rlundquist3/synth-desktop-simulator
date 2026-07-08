@@ -9,20 +9,32 @@ pub struct Parameter {
     pub value: Arc<AtomicU32>, // value is Arc<AtomicU32> so it can be used safely across both the audio and UI threads
     pub delta: f32,
     pub range: (f32, f32),
+    render: fn(f32) -> String,
 }
 
 impl Parameter {
-    pub fn new(name: &'static str, initial: f32, delta: f32, range: (f32, f32)) -> Self {
+    pub fn new(
+        name: &'static str,
+        initial: f32,
+        delta: f32,
+        range: (f32, f32),
+        render: fn(f32) -> String,
+    ) -> Self {
         Parameter {
             name,
             value: Arc::new(AtomicU32::new(initial.to_bits())),
             delta,
             range,
+            render,
         }
     }
 
     pub fn get_value(&self) -> f32 {
         f32::from_bits(self.value.load(Ordering::Relaxed))
+    }
+
+    pub fn render_value(&self) -> String {
+        (self.render)(self.get_value())
     }
 
     pub fn set_value(&self, v: f32) {

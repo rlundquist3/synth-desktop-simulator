@@ -20,7 +20,9 @@ impl Gain {
         Gain {
             gain_db,
             gain_linear: db_to_linear_gain(gain_db),
-            parameters: vec![Parameter::new("Gain", gain_db, 0.5, (-16.0, 12.0))],
+            parameters: vec![Parameter::new("Gain", gain_db, 0.5, (-16.0, 12.0), |v| {
+                format!("{:.1}", v)
+            })],
         }
     }
 }

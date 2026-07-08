@@ -12,6 +12,7 @@ use crossterm::{
     },
     execute,
 };
+use ratatui::layout::Constraint::Length;
 use ratatui::layout::{Constraint, Flex, Layout};
 use ratatui::{
     DefaultTerminal, Frame,
@@ -34,20 +35,23 @@ const ALL_KEYS: &[char] = &[
 
 #[derive(Debug)]
 struct Controls {
-    row_count: usize,
-    column_count: usize,
-    total_count: usize,
+    effect_row_count: usize,
+    effect_column_count: usize,
+    effect_count: usize,
+    // focus_index: 0 = instrument, 1..=effect_count = effects
     focus_index: usize,
     is_editing: bool,
     param_focus_index: usize,
 }
 
 impl Controls {
-    pub fn new(row_count: usize, column_count: usize) -> Self {
+    pub fn new(effect_count: usize) -> Self {
+        let effect_column_count = effect_count.min(3).max(1);
+        let effect_row_count = effect_count.div_ceil(effect_column_count);
         Controls {
-            row_count,
-            column_count,
-            total_count: row_count * column_count,
+            effect_row_count,
+            effect_column_count,
+            effect_count,
             focus_index: 0,
             is_editing: false,
             param_focus_index: 0,
@@ -65,24 +69,24 @@ impl Controls {
     }
 
     pub fn move_right(&mut self) {
-        if self.is_editing {
+        if self.is_editing || self.focus_index == 0 {
             return;
         }
-
-        if self.focus_index % self.column_count == self.column_count - 1 {
-            self.focus_index -= self.column_count - 1;
+        let eff_idx = self.focus_index - 1;
+        if eff_idx % self.effect_column_count == self.effect_column_count - 1 {
+            self.focus_index -= self.effect_column_count - 1;
         } else {
             self.focus_index += 1;
         }
     }
 
     pub fn move_left(&mut self) {
-        if self.is_editing {
+        if self.is_editing || self.focus_index == 0 {
             return;
         }
-
-        if self.focus_index % self.column_count == 0 {
-            self.focus_index += self.column_count - 1;
+        let eff_idx = self.focus_index - 1;
+        if eff_idx % self.effect_column_count == 0 {
+            self.focus_index += self.effect_column_count - 1;
         } else {
             self.focus_index -= 1;
         }
@@ -92,19 +96,25 @@ impl Controls {
         if self.is_editing {
             return;
         }
-
-        self.focus_index = (self.focus_index + self.column_count) % self.total_count;
+        if self.focus_index == 0 {
+            if self.effect_count > 0 {
+                self.focus_index = 1;
+            }
+        } else {
+            let eff_idx = self.focus_index - 1;
+            self.focus_index = 1 + (eff_idx + self.effect_column_count) % self.effect_count;
+        }
     }
 
     pub fn move_up(&mut self) {
-        if self.is_editing {
+        if self.is_editing || self.focus_index == 0 {
             return;
         }
-
-        if self.focus_index < self.column_count {
-            self.focus_index += (self.row_count - 1) * self.column_count;
+        let eff_idx = self.focus_index - 1;
+        if eff_idx < self.effect_column_count {
+            self.focus_index = 0;
         } else {
-            self.focus_index -= self.column_count;
+            self.focus_index -= self.effect_column_count;
         }
     }
 }
@@ -122,16 +132,13 @@ pub struct UI {
 impl UI {
     pub fn new(audio_device: MixerDeviceSink) -> Self {
         let instrument = FMSynthInstrument::new();
-        let control_count = 1 + instrument.effects.len(); // instrument controls + effects
-        let column_count = control_count.min(3);
-        let row_count = control_count.div_ceil(column_count);
 
         UI {
             audio_device: audio_device,
+            controls_interface: Controls::new(instrument.effects.len()),
             instrument,
             last_key: '_',
             last_freq: String::from("_"),
-            controls_interface: Controls::new(row_count, column_count),
             exit: false,
         }
     }
@@ -301,16 +308,9 @@ impl Widget for &UI {
         let inner_area = container.inner(area);
         container.render(area, buf);
 
-        let outer_columns = Layout::horizontal([Constraint::Length(60), Constraint::Length(90)])
-            .flex(Flex::SpaceBetween);
-
-        // TODO: put instrument controls on first row alone, then effects in a grid below
-        let inner_rows =
-            Layout::vertical((0..self.controls_interface.row_count).map(|_| Constraint::Length(7)))
-                .spacing(1);
-        let inner_columns = Layout::horizontal(
-            (0..self.controls_interface.column_count).map(|_| Constraint::Length(18)),
-        );
+        let outer_columns =
+            Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)])
+                .flex(Flex::SpaceBetween);
 
         let outer_cells = outer_columns.split(inner_area);
 
@@ -377,14 +377,17 @@ impl Widget for &UI {
             .block(Block::bordered())
             .render(outer_cells[0], buf);
 
-        // render controls_interface
-        let control_rows = inner_rows.split(outer_cells[1]);
-        let control_cells = control_rows
-            .iter()
-            .flat_map(|&row| inner_columns.split(row).to_vec());
+        // render controls: instrument row on top, effects grid below
+        let right_sections = Layout::vertical([Constraint::Length(7), Constraint::Fill(1)])
+            .spacing(1)
+            .split(outer_cells[1]);
 
-        for (i, cell) in control_cells.enumerate() {
-            let container = if i == self.controls_interface.focus_index {
+        let render_control_cell = |focus_i: usize,
+                                   name: &str,
+                                   parameters: Vec<crate::parameter::Parameter>,
+                                   cell: Rect,
+                                   buf: &mut Buffer| {
+            let container = if focus_i == self.controls_interface.focus_index {
                 match self.controls_interface.is_editing {
                     true => Block::bordered().on_green(),
                     false => Block::bordered().on_blue(),
@@ -392,46 +395,75 @@ impl Widget for &UI {
             } else {
                 Block::bordered()
             };
+            let inner_cell = container.inner(cell);
+            container.render(cell, buf);
 
-            if i < self.instrument.effects.len() + 1 {
-                let (name, parameters) = match i {
-                    0 => (String::from("FM"), self.instrument.get_parameters()),
-                    _ => {
-                        let effect = &self.instrument.effects[i - 1];
-                        (effect.get_name(), effect.get_parameters())
-                    }
+            let sections =
+                Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).split(inner_cell);
+            Paragraph::new(name.to_string())
+                .bold()
+                .centered()
+                .render(sections[0], buf);
+
+            let param_cols =
+                Layout::horizontal((0..parameters.len()).map(|_| Constraint::Length(9)))
+                    .spacing(1)
+                    .split(sections[1]);
+            for (j, c) in param_cols.iter().enumerate() {
+                let param_block = if self.controls_interface.is_editing
+                    && focus_i == self.controls_interface.focus_index
+                    && j == self.controls_interface.param_focus_index
+                {
+                    Block::new().on_cyan()
+                } else {
+                    Block::new()
                 };
+                Paragraph::new(format!(
+                    "{}\n↑\n{}\n↓",
+                    parameters[j].name,
+                    parameters[j].render_value()
+                ))
+                .centered()
+                .block(param_block)
+                .render(*c, buf);
+            }
+        };
 
-                let inner_cell = container.inner(cell);
-                container.render(cell, buf);
+        // instrument row
+        let instrument_cell = Layout::horizontal([Constraint::Max(50), Constraint::Fill(1)])
+            .split(right_sections[0])[0];
+        render_control_cell(
+            0,
+            "FM",
+            self.instrument.get_parameters(),
+            instrument_cell,
+            buf,
+        );
 
-                let effect_row_constraints =
-                    Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]);
-                let parameter_columns =
-                    Layout::horizontal((0..parameters.len()).map(|_| Constraint::Length(9)));
+        // effects grid
+        let effect_rows_layout = Layout::vertical(
+            (0..self.controls_interface.effect_row_count).map(|_| Constraint::Length(7)),
+        )
+        .spacing(1);
+        let effect_cols_layout = Layout::horizontal(
+            (0..self.controls_interface.effect_column_count).map(|_| Constraint::Length(18)),
+        );
+        let effect_cells: Vec<Rect> = effect_rows_layout
+            .split(right_sections[1])
+            .iter()
+            .flat_map(|&row| effect_cols_layout.split(row).to_vec())
+            .collect();
 
-                let effect_rows = effect_row_constraints.split(inner_cell);
-                Paragraph::new(name).centered().render(effect_rows[0], buf);
-                let parameter_cells = parameter_columns.split(effect_rows[1]);
-
-                for (j, c) in parameter_cells.iter().enumerate() {
-                    let container = if self.controls_interface.is_editing
-                        && i == self.controls_interface.focus_index
-                        && j == self.controls_interface.param_focus_index
-                    {
-                        Block::new().on_cyan()
-                    } else {
-                        Block::new()
-                    };
-
-                    Paragraph::new(format!(
-                        "{}\n↑\n{:.1}\n↓",
-                        parameters[j].name,
-                        parameters[j].get_value()
-                    ))
-                    .block(container)
-                    .render(*c, buf);
-                }
+        for (j, cell) in effect_cells.iter().enumerate() {
+            if j < self.instrument.effects.len() {
+                let effect = &self.instrument.effects[j];
+                render_control_cell(
+                    j + 1,
+                    &effect.get_name(),
+                    effect.get_parameters(),
+                    *cell,
+                    buf,
+                );
             }
         }
     }
