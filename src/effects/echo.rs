@@ -26,6 +26,10 @@ impl Echo {
             buffer: vec![0.0; max_samples],
             write_index: 0,
             parameters: vec![
+                Parameter::new("Toggle", 0.0, 1.0, (0.0, 1.0), |v| match v {
+                    1.0 => format!("on"),
+                    _ => format!("off"),
+                }),
                 Parameter::new("Delay", delay_secs, 0.1, (0.0, 1.0), |v| {
                     format!("{:.1}s", v)
                 }),
@@ -45,8 +49,14 @@ impl Effect for Echo {
     }
 
     fn process(&mut self, sample: f32) -> f32 {
-        let delay_samples = (self.parameters[0].get_value() * SAMPLE_RATE as f32) as usize;
-        let amp = self.parameters[1].get_value();
+        let on = self.parameters[0].get_value();
+
+        if on != 1.0 {
+            return sample;
+        }
+
+        let delay_samples = (self.parameters[1].get_value() * SAMPLE_RATE as f32) as usize;
+        let amp = self.parameters[2].get_value();
 
         let max = self.buffer.len();
         let read_index = (self.write_index + max - delay_samples.min(max - 1)) % max;

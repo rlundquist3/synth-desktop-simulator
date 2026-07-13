@@ -10,11 +10,10 @@ use crossterm::{
     },
     execute,
 };
-use ratatui::layout::{Constraint, Flex, Layout};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
-    layout::Rect,
+    layout::{Constraint, Flex, Layout, Rect},
     style::{Color, Style, Stylize},
     symbols::border,
     text::{Line, Span, Text},

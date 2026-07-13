@@ -12,6 +12,7 @@ use crate::amp_envelope::AmpEnvelope;
 use crate::effects::Effect;
 use crate::effects::echo::Echo;
 use crate::effects::gain::Gain;
+use crate::effects::low_pass::LowPass;
 use crate::fm_synth::FMSynth;
 use crate::parameter::{
     Parameter,
@@ -37,7 +38,7 @@ pub struct FMSynthInstrument {
 
 impl FMSynthInstrument {
     pub fn new() -> Self {
-        let envelope = AmpEnvelope::new(0.3, 0.2, 0.8, 0.8);
+        let envelope = AmpEnvelope::new(0.3, 0.2, 0.8, 0.2);
         let signal_source = FMSynth::new(envelope.clone());
         let voices = Voices::new(
             (0..5)
@@ -47,6 +48,7 @@ impl FMSynthInstrument {
 
         let mut effects: Vec<Box<dyn Effect>> = Vec::new();
         effects.push(Box::new(Echo::new(0.0, 0.0)));
+        effects.push(Box::new(LowPass::new(200.0, 1.0)));
 
         FMSynthInstrument {
             voices,
@@ -133,7 +135,9 @@ impl UserParameters for FMSynthInstrument {
         let synth_param_count = self.parameters.len();
 
         if index >= synth_param_count {
-            return self.envelope.update_parameter(index - synth_param_count, change);
+            return self
+                .envelope
+                .update_parameter(index - synth_param_count, change);
         }
 
         let param = self.parameters.get(index)?;
