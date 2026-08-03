@@ -188,19 +188,19 @@ impl UI {
             KeyCode::Char('e') => A440, // A
             KeyCode::Char('4') => get_freq_for_note(1),
             KeyCode::Char('r') => get_freq_for_note(2), // B
-            KeyCode::Char('t') => get_freq_for_note(4), // C
-            KeyCode::Char('6') => get_freq_for_note(5),
-            KeyCode::Char('y') => get_freq_for_note(6), // D
-            KeyCode::Char('7') => get_freq_for_note(7),
-            KeyCode::Char('u') => get_freq_for_note(8), // E
-            KeyCode::Char('i') => get_freq_for_note(9), // F
-            KeyCode::Char('9') => get_freq_for_note(10),
-            KeyCode::Char('o') => get_freq_for_note(11), // G
-            KeyCode::Char('0') => get_freq_for_note(12),
-            KeyCode::Char('p') => get_freq_for_note(13), // A
-            KeyCode::Char('-') => get_freq_for_note(14),
-            KeyCode::Char('[') => get_freq_for_note(15), // B
-            KeyCode::Char(']') => get_freq_for_note(16), // C
+            KeyCode::Char('t') => get_freq_for_note(3), // C
+            KeyCode::Char('6') => get_freq_for_note(4),
+            KeyCode::Char('y') => get_freq_for_note(5), // D
+            KeyCode::Char('7') => get_freq_for_note(6),
+            KeyCode::Char('u') => get_freq_for_note(7), // E
+            KeyCode::Char('i') => get_freq_for_note(8), // F
+            KeyCode::Char('9') => get_freq_for_note(9),
+            KeyCode::Char('o') => get_freq_for_note(10), // G
+            KeyCode::Char('0') => get_freq_for_note(11),
+            KeyCode::Char('p') => get_freq_for_note(12), // A
+            KeyCode::Char('-') => get_freq_for_note(13),
+            KeyCode::Char('[') => get_freq_for_note(14), // B
+            KeyCode::Char(']') => get_freq_for_note(15), // C
             _ => 0.0,
         };
 
@@ -442,7 +442,7 @@ impl Widget for &UI {
         )
         .spacing(1);
         let effect_cols_layout = Layout::horizontal(
-            (0..self.controls_interface.effect_column_count).map(|_| Constraint::Length(18)),
+            (0..self.controls_interface.effect_column_count).map(|_| Constraint::Length(24)),
         );
         let effect_cells: Vec<Rect> = effect_rows_layout
             .split(right_sections[1])

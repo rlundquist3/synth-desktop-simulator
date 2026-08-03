@@ -78,7 +78,7 @@ impl Effect for LowPass {
     }
 
     fn get_name(&self) -> String {
-        String::from("Low Pass")
+        String::from("Low Pass Filter")
     }
 }
 
