@@ -24,6 +24,7 @@ impl Biquad {
     pub fn new(
         name: &str,
         cutoff_freq: f32,
+        cutoff_freq_range: (f32, f32),
         q: f32,
         get_normalized_coefficients: NormalizedCoefficientsFn,
     ) -> Self {
@@ -36,7 +37,7 @@ impl Biquad {
                     1.0 => format!("on"),
                     _ => format!("off"),
                 }),
-                Parameter::new("Cutoff Freq", cutoff_freq, 10.0, (20.0, 600.0), |v| {
+                Parameter::new("Cutoff Freq", cutoff_freq, 10.0, cutoff_freq_range, |v| {
                     format!("{:.0}Hz", v)
                 }),
                 Parameter::new("Q", q, 0.1, (0.1, 30.0), |v| format!("{:.1}", v)),

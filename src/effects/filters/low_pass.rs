@@ -24,6 +24,7 @@ pub fn new(cutoff_freq: f32, q: f32) -> Biquad {
     Biquad::new(
         "Low Pass Filter",
         cutoff_freq,
+        (0.0, 600.0),
         q,
         get_normalized_coefficients,
     )
