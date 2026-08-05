@@ -1,6 +1,6 @@
 # Terminal Synth
 
-Rudimentary frequency modulation synthesizer written in Rust, with a terminal UI.
+Basic frequency modulation synthesizer written in Rust, with a terminal UI.
 
 At this time, this is not intended to be a highly usable instrument, rather a playground for learning audio programming/digital signal processing. It only has a range of about an octave and a half, represented on a computer keyboard.
 
