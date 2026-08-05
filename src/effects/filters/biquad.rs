@@ -1,7 +1,4 @@
-use std::f32::consts::PI;
-
 use crate::{
-    SAMPLE_RATE,
     effects::Effect,
     parameter::{
         Parameter,
@@ -10,20 +7,30 @@ use crate::{
     },
 };
 
+pub type NormalizedCoefficientsFn = fn(f32, f32) -> ((f32, f32, f32), (f32, f32, f32));
+
 #[derive(Debug)]
-pub struct LowPass {
+pub struct Biquad {
+    name: String,
     parameters: Vec<Parameter>,
     a: (f32, f32, f32),
     b: (f32, f32, f32),
     s_1: f32,
     s_2: f32,
+    get_normalized_coefficients: NormalizedCoefficientsFn,
 }
 
-impl LowPass {
-    pub fn new(cutoff_freq: f32, q: f32) -> Self {
+impl Biquad {
+    pub fn new(
+        name: &str,
+        cutoff_freq: f32,
+        q: f32,
+        get_normalized_coefficients: NormalizedCoefficientsFn,
+    ) -> Self {
         let (a, b) = get_normalized_coefficients(cutoff_freq, q);
 
-        LowPass {
+        Biquad {
+            name: name.to_string(),
             parameters: vec![
                 Parameter::new("Toggle", 0.0, 1.0, (0.0, 1.0), |v| match v {
                     1.0 => format!("on"),
@@ -38,6 +45,7 @@ impl LowPass {
             b,
             s_1: 0.0,
             s_2: 0.0,
+            get_normalized_coefficients,
         }
     }
 
@@ -45,21 +53,23 @@ impl LowPass {
         let cutoff_freq = self.parameters[1].get_value();
         let q = self.parameters[2].get_value();
 
-        let (a, b) = get_normalized_coefficients(cutoff_freq, q);
+        let (a, b) = (self.get_normalized_coefficients)(cutoff_freq, q);
 
         self.a = a;
         self.b = b;
     }
 }
 
-impl Effect for LowPass {
+impl Effect for Biquad {
     fn clone_box(&self) -> Box<dyn Effect> {
-        Box::new(LowPass {
+        Box::new(Biquad {
+            name: self.name.clone(),
             parameters: self.parameters.clone(),
             a: self.a.clone(),
             b: self.b.clone(),
             s_1: self.s_1.clone(),
             s_2: self.s_2.clone(),
+            get_normalized_coefficients: self.get_normalized_coefficients,
         })
     }
 
@@ -78,11 +88,11 @@ impl Effect for LowPass {
     }
 
     fn get_name(&self) -> String {
-        String::from("Low Pass Filter")
+        self.name.clone()
     }
 }
 
-impl UserParameters for LowPass {
+impl UserParameters for Biquad {
     fn get_parameters(&self) -> Vec<Parameter> {
         self.parameters.clone()
     }
@@ -101,22 +111,4 @@ impl UserParameters for LowPass {
 
         Some(param.clone())
     }
-}
-
-fn get_normalized_coefficients(cutoff_freq: f32, q: f32) -> ((f32, f32, f32), (f32, f32, f32)) {
-    let k: f32 = (PI * cutoff_freq / SAMPLE_RATE as f32).tan();
-    let a_0 = 1.0 + k / q + k.powf(2.0);
-
-    let b = (
-        k.powf(2.0) / a_0,
-        2.0 * k.powf(2.0) / a_0,
-        k.powf(2.0) / a_0,
-    );
-    let a = (
-        1.0,
-        (2.0 * k.powf(2.0) - 2.0) / a_0,
-        (1.0 - k / q + k.powf(2.0)) / a_0,
-    );
-
-    (a, b)
 }

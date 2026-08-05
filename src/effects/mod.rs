@@ -1,6 +1,6 @@
 pub mod echo;
+pub mod filters;
 pub mod gain;
-pub mod low_pass;
 
 use crate::parameter::UserParameters;
 

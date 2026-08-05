@@ -12,7 +12,7 @@ use crate::amp_envelope::AmpEnvelope;
 use crate::effects::Effect;
 use crate::effects::echo::Echo;
 use crate::effects::gain::Gain;
-use crate::effects::low_pass::LowPass;
+use crate::effects::filters::low_pass;
 use crate::fm_synth::FMSynth;
 use crate::parameter::{
     Parameter,
@@ -48,7 +48,7 @@ impl FMSynthInstrument {
 
         let mut effects: Vec<Box<dyn Effect>> = Vec::new();
         effects.push(Box::new(Echo::new(0.0, 0.0)));
-        effects.push(Box::new(LowPass::new(200.0, 1.0)));
+        effects.push(Box::new(low_pass::new(200.0, 1.0)));
 
         FMSynthInstrument {
             voices,
