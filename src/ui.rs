@@ -1,4 +1,5 @@
 use crate::fm_synth_instrument::FMSynthInstrument;
+use crate::log;
 use crate::parameter::ParameterChange::{Decrement, Increment};
 use crate::parameter::UserParameters;
 use crate::utils::{A440, get_freq_for_note};
@@ -20,7 +21,9 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 use rodio::MixerDeviceSink;
-use std::{io::Result, sync::atomic::Ordering};
+use std::{io::Result, sync::atomic::Ordering, time::Duration};
+
+const TICK_RATE: Duration = Duration::from_millis(50);
 
 const BLACK_KEYS: &[char] = &['2', '3', '4', ' ', '6', '7', ' ', '9', '0', '-'];
 const WHITE_KEYS: &[char] = &['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']'];
@@ -34,7 +37,7 @@ struct Controls {
     effect_row_count: usize,
     effect_column_count: usize,
     effect_count: usize,
-    // focus_index: 0 = instrument, 1..=effect_count = effects
+    // focus_index: 0 -> instrument, 1..=effect_count -> effects
     focus_index: usize,
     is_editing: bool,
     param_focus_index: usize,
@@ -161,6 +164,10 @@ impl UI {
     }
 
     pub fn handle_events(&mut self) -> Result<()> {
+        if !event::poll(TICK_RATE)? {
+            return Ok(());
+        }
+
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
                 self.handle_key_press(key_event)
@@ -304,11 +311,16 @@ impl Widget for &UI {
         let inner_area = container.inner(area);
         container.render(area, buf);
 
+        let main_sections =
+            Layout::vertical([Constraint::Fill(1), Constraint::Length(8)]).split(inner_area);
+        let main_area = main_sections[0];
+        let log_area = main_sections[1];
+
         let outer_columns =
             Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)])
                 .flex(Flex::SpaceBetween);
 
-        let outer_cells = outer_columns.split(inner_area);
+        let outer_cells = outer_columns.split(main_area);
 
         // render keyboard
         let key_text = Line::from(vec![
@@ -462,5 +474,18 @@ impl Widget for &UI {
                 );
             }
         }
+
+        // render log panel
+        let visible_rows = log_area.height.saturating_sub(2) as usize;
+        let log_lines: Vec<Line> = log::snapshot()
+            .iter()
+            .rev()
+            .take(visible_rows)
+            .rev()
+            .map(|line| Line::from(line.clone()))
+            .collect();
+        Paragraph::new(log_lines)
+            .block(Block::bordered().title(" Log "))
+            .render(log_area, buf);
     }
 }

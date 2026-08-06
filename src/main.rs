@@ -2,15 +2,17 @@ mod amp_envelope;
 mod effects;
 mod fm_synth;
 mod fm_synth_instrument;
+mod log;
+mod midi;
 mod oscillator;
 mod parameter;
 mod ui;
 mod utils;
 mod voices;
 
-use crate::ui::UI;
+use crate::{midi::read_midi_input, ui::UI};
 use rodio::DeviceSinkBuilder;
-use std::io::Result;
+use std::{io::Result, thread};
 
 // Hardcoded for now; TODO: make this configurable
 pub static SAMPLE_RATE: u32 = 44100;
@@ -20,6 +22,11 @@ fn main() -> Result<()> {
         DeviceSinkBuilder::open_default_sink().expect("Should open default audio device");
 
     let mut ui = UI::new(audio_device);
+
+    thread::spawn(|| match read_midi_input() {
+        Ok(_) => (),
+        Err(err) => log::push(format!("Error: {:?}", err)),
+    });
 
     ratatui::run(|terminal| ui.run(terminal))
 }
