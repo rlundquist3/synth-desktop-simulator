@@ -300,7 +300,20 @@ impl UI {
 impl Widget for &UI {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let title = Line::from(" Terminal Synth ".bold());
-        let instructions = Line::from(vec![" Quit ".into(), "<Ctrl+C> ".red().bold()]);
+        let instructions = Line::from(vec![
+            " Navigate ".into(),
+            "<↑/↓/←/→> ".bold(),
+            " Select Section ".into(),
+            "<Enter> ".bold(),
+            " Select Param ".into(),
+            "<←/→> ".bold(),
+            " Update Param ".into(),
+            "<↑/↓> ".bold(),
+            " Deselect Section ".into(),
+            "<Esc> ".bold(),
+            " Quit ".into(),
+            "<Ctrl+C> ".red().bold(),
+        ]);
         let container = Block::bordered()
             .title(title.centered())
             .title_bottom(instructions.right_aligned())

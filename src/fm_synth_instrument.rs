@@ -48,10 +48,10 @@ impl FMSynthInstrument {
         );
 
         let mut effects: Vec<Box<dyn Effect>> = Vec::new();
-        effects.push(Box::new(Echo::new(0.0, 0.0)));
         effects.push(Box::new(low_pass::new(200.0, 1.0)));
         effects.push(Box::new(high_pass::new(1000.0, 1.0)));
         effects.push(Box::new(band_pass::new(800.0, 1.0)));
+        effects.push(Box::new(Echo::new(0.0, 0.0)));
 
         FMSynthInstrument {
             voices,
