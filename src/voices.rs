@@ -7,9 +7,9 @@ pub trait Voice: Clone + Send + Iterator<Item = f32> {
 #[derive(Clone, Debug)]
 pub struct Voices<T> {
     pub voices: Vec<T>,
-    key_voice_map: HashMap<char, usize>,
+    note_voice_map: HashMap<u8, usize>,
     free_voices: VecDeque<usize>,
-    used_voices: VecDeque<(usize, char)>,
+    used_voices: VecDeque<(usize, u8)>,
 }
 
 impl<T> Voices<T> {
@@ -22,14 +22,14 @@ impl<T> Voices<T> {
 
         Voices {
             voices: voices,
-            key_voice_map: HashMap::new(),
+            note_voice_map: HashMap::new(),
             free_voices: free_voices,
             used_voices: VecDeque::new(),
         }
     }
 
-    pub fn voice_on(&mut self, key: char) -> &mut T {
-        let i = match self.key_voice_map.get(&key) {
+    pub fn voice_on(&mut self, note: u8) -> &mut T {
+        let i = match self.note_voice_map.get(&note) {
             Some(&i) => {
                 self.remove_from_used_queue(i);
                 i
@@ -38,22 +38,22 @@ impl<T> Voices<T> {
                 let i = match self.free_voices.pop_front() {
                     Some(i) => i,
                     None => {
-                        let (i, key) = self.used_voices.pop_front().unwrap();
-                        self.key_voice_map.remove(&key);
+                        let (i, note) = self.used_voices.pop_front().unwrap();
+                        self.note_voice_map.remove(&note);
                         i
                     }
                 };
-                self.key_voice_map.insert(key, i);
+                self.note_voice_map.insert(note, i);
                 i
             }
         };
 
-        self.used_voices.push_back((i, key));
+        self.used_voices.push_back((i, note));
         &mut self.voices[i]
     }
 
-    pub fn voice_off(&mut self, key: char) -> Option<&mut T> {
-        match self.key_voice_map.remove(&key) {
+    pub fn voice_off(&mut self, note: u8) -> Option<&mut T> {
+        match self.note_voice_map.remove(&note) {
             Some(i) => {
                 self.remove_from_used_queue(i);
                 self.free_voices.push_back(i);
