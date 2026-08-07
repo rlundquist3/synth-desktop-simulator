@@ -20,7 +20,6 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Paragraph, Widget},
 };
-use rodio::MixerDeviceSink;
 use std::{io::Result, sync::atomic::Ordering, time::Duration};
 
 const TICK_RATE: Duration = Duration::from_millis(50);
@@ -120,7 +119,6 @@ impl Controls {
 
 #[derive(Debug)]
 pub struct UI {
-    audio_device: MixerDeviceSink,
     instrument: FMSynthInstrument,
     last_key: char,
     last_freq: String,
@@ -129,11 +127,8 @@ pub struct UI {
 }
 
 impl UI {
-    pub fn new(audio_device: MixerDeviceSink) -> Self {
-        let instrument = FMSynthInstrument::new();
-
+    pub fn new(instrument: FMSynthInstrument) -> Self {
         UI {
-            audio_device: audio_device,
             controls_interface: Controls::new(instrument.effects.len()),
             instrument,
             last_key: '_',
@@ -147,8 +142,6 @@ impl UI {
             std::io::stdout(),
             PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
         )?;
-
-        self.audio_device.mixer().add(self.instrument.clone());
 
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
@@ -215,7 +208,12 @@ impl UI {
             if let Some(pressed_key) = key_event.code.as_char() {
                 self.last_key = pressed_key;
                 self.last_freq = format!("{freq}");
-                let mut voice = self.instrument.voices.voice_on(pressed_key).lock().unwrap();
+                let mut voice = self
+                    .instrument
+                    .voices
+                    .voice_on(pressed_key as u8)
+                    .lock()
+                    .unwrap();
                 voice.set_freq(freq);
                 voice.on.store(true, Ordering::Relaxed);
             }
@@ -287,7 +285,7 @@ impl UI {
     fn handle_key_release(&mut self, key_event: KeyEvent) {
         if let Some(k) = key_event.code.as_char() {
             if ALL_KEYS.contains(&k) {
-                if let Some(voice) = self.instrument.voices.voice_off(k) {
+                if let Some(voice) = self.instrument.voices.voice_off(k as u8) {
                     voice.lock().unwrap().on.store(false, Ordering::Relaxed);
                 }
             }
