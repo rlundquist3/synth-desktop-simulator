@@ -9,27 +9,31 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Gain {
+pub struct SoftClipper {
     gain_db: f32,
     gain_linear: f32,
     parameters: Vec<Parameter>,
 }
 
-impl Gain {
+impl SoftClipper {
     pub fn new(gain_db: f32) -> Self {
-        Gain {
+        SoftClipper {
             gain_db,
             gain_linear: db_to_linear_gain(gain_db),
-            parameters: vec![Parameter::new("Gain", gain_db, 0.5, (-16.0, 12.0), |v| {
-                format!("{:.1}dB", v)
-            })],
+            parameters: vec![
+                Parameter::new("Toggle", 0.0, 1.0, (0.0, 1.0), |v| match v {
+                    1.0 => format!("on"),
+                    _ => format!("off"),
+                }),
+                Parameter::new("Gain", gain_db, 0.5, (0.0, 16.0), |v| format!("{:.1}dB", v)),
+            ],
         }
     }
 }
 
-impl Effect for Gain {
+impl Effect for SoftClipper {
     fn clone_box(&self) -> Box<dyn Effect> {
-        Box::new(Gain {
+        Box::new(SoftClipper {
             gain_db: self.gain_db,
             gain_linear: self.gain_linear,
             parameters: self.parameters.clone(),
@@ -37,20 +41,27 @@ impl Effect for Gain {
     }
 
     fn process(&mut self, sample: f32) -> f32 {
+        let on = self.parameters[0].get_value();
+
+        if on != 1.0 {
+            return sample;
+        }
+
         let current_db = self.parameters[0].get_value();
         if current_db != self.gain_db {
             self.gain_db = current_db;
             self.gain_linear = db_to_linear_gain(current_db);
         }
-        self.gain_linear * sample
+
+        (self.gain_linear * sample).tanh() / self.gain_linear.tanh()
     }
 
     fn get_name(&self) -> String {
-        String::from("Gain")
+        String::from("Soft Clipper")
     }
 }
 
-impl UserParameters for Gain {
+impl UserParameters for SoftClipper {
     fn get_parameters(&self) -> Vec<Parameter> {
         self.parameters.clone()
     }

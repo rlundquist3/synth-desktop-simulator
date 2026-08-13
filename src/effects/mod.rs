@@ -1,6 +1,7 @@
 pub mod echo;
 pub mod filters;
 pub mod gain;
+pub mod soft_clipper;
 
 use crate::parameter::UserParameters;
 
