@@ -1,9 +1,9 @@
 use crate::fm_synth_instrument::{FMSynthInstrument, SAMPLE_HISTORY_SIZE};
-use crate::log;
 use crate::parameter::ParameterChange::{Decrement, Increment};
 use crate::parameter::UserParameters;
-use crate::utils::{A440, get_freq_for_note};
+use crate::utils::{A440, get_freq_for_note, get_mag_spectrum};
 use crate::voices::Voice;
+use crate::{SAMPLE_RATE, log};
 use crossterm::{
     event::{
         self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
@@ -22,8 +22,7 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Paragraph, Widget},
 };
-use std::format;
-use std::rc::Rc;
+use std::{format, vec};
 use std::{io::Result, sync::atomic::Ordering, time::Duration};
 
 const TICK_RATE: Duration = Duration::from_millis(50);
@@ -362,7 +361,11 @@ impl UI {
             .render(area, buf);
     }
 
-    fn render_controls(&self, area: Rc<[Rect]>, buf: &mut Buffer) {
+    fn render_controls(&self, area: Rect, buf: &mut Buffer) {
+        let control_subsections = Layout::vertical([Constraint::Length(7), Constraint::Fill(1)])
+            .spacing(1)
+            .split(area);
+
         let render_control_cell = |focus_i: usize,
                                    name: &str,
                                    parameters: Vec<crate::parameter::Parameter>,
@@ -410,8 +413,8 @@ impl UI {
             }
         };
 
-        let instrument_cell =
-            Layout::horizontal([Constraint::Max(80), Constraint::Fill(1)]).split(area[0])[0];
+        let instrument_cell = Layout::horizontal([Constraint::Max(80), Constraint::Fill(1)])
+            .split(control_subsections[0])[0];
         render_control_cell(
             0,
             "FM",
@@ -428,7 +431,7 @@ impl UI {
             (0..self.controls_interface.effect_column_count).map(|_| Constraint::Length(24)),
         );
         let effect_cells: Vec<Rect> = effect_rows_layout
-            .split(area[1])
+            .split(control_subsections[1])
             .iter()
             .flat_map(|&row| effect_cols_layout.split(row).to_vec())
             .collect();
@@ -448,33 +451,72 @@ impl UI {
     }
 
     fn render_visualizations(&self, area: Rect, buf: &mut Buffer) {
+        let visualization_subsections =
+            Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .spacing(1)
+                .split(area);
+
         let sample_history = self.instrument.get_sample_history();
         let sample_history = sample_history.lock().unwrap();
-        let data: Vec<(f64, f64)> = sample_history
+
+        // waveform
+        let index_sample_pairs: Vec<(f64, f64)> = sample_history
             .iter()
             .enumerate()
             .map(|(i, v)| (i as f64, *v as f64))
             .collect();
 
-        let dataset = Dataset::default()
+        let waveform_dataset = Dataset::default()
             .marker(symbols::Marker::Braille)
             .graph_type(GraphType::Line)
             .style(Style::default().fg(Color::Red))
-            .data(&data);
+            .data(&index_sample_pairs);
 
-        Chart::new(vec![dataset])
+        Chart::new(vec![waveform_dataset])
             .block(Block::bordered())
             .x_axis(
                 Axis::default()
-                    .style(Style::default().fg(Color::Gray))
-                    .bounds([0.0, SAMPLE_HISTORY_SIZE as f64]),
+                    .bounds([0.0, SAMPLE_HISTORY_SIZE as f64])
+                    .style(Style::default().fg(Color::Gray)),
             )
             .y_axis(
                 Axis::default()
-                    .style(Style::default().fg(Color::Gray))
-                    .bounds([-1.0, 1.0]),
+                    .bounds([-1.0, 1.0])
+                    .style(Style::default().fg(Color::Gray)),
             )
-            .render(area, buf);
+            .render(visualization_subsections[0], buf);
+
+        // magnitude spectrum (log x-axis)
+        let min_freq = 80.0;
+        let max_freq = SAMPLE_RATE as f64 / 2.0;
+
+        let samples = sample_history.iter().map(|s| *s).collect();
+        let freq_mag_pairs: Vec<(f64, f64)> = get_mag_spectrum(&samples)
+            .into_iter()
+            .filter(|(freq, _)| *freq >= min_freq)
+            .map(|(freq, mag)| (freq.log10(), mag))
+            .collect();
+        let mag_dataset = Dataset::default()
+            .marker(symbols::Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Yellow))
+            .data(&freq_mag_pairs);
+
+        Chart::new(vec![mag_dataset])
+            .block(Block::bordered())
+            .x_axis(
+                Axis::default()
+                    .bounds([min_freq.log10(), max_freq.log10()])
+                    .style(Style::default().fg(Color::Gray))
+                    .title("freq (Hz)"),
+            )
+            .y_axis(
+                Axis::default()
+                    .bounds([0.0, 30.0])
+                    .style(Style::default().fg(Color::Gray))
+                    .title("magnitude"),
+            )
+            .render(visualization_subsections[1], buf);
     }
 
     fn render_log_panel(&self, area: Rect, buf: &mut Buffer) {
@@ -527,14 +569,9 @@ impl Widget for &UI {
         .flex(Flex::SpaceBetween);
         let sections = outer_columns.split(main_area);
 
-        // control sections: instrument row on top, effects grid below
-        let control_subsections = Layout::vertical([Constraint::Length(7), Constraint::Fill(1)])
-            .spacing(1)
-            .split(sections[1]);
-
         container.render(area, buf);
         self.render_keyboard(sections[0], buf);
-        self.render_controls(control_subsections, buf);
+        self.render_controls(sections[1], buf);
         self.render_visualizations(sections[2], buf);
         self.render_log_panel(log_area, buf);
     }
