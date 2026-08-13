@@ -486,8 +486,9 @@ impl UI {
             )
             .render(visualization_subsections[0], buf);
 
-        // magnitude spectrum (log x-axis)
-        let min_freq = 80.0;
+        // magnitude spectrum (logarithmic x-axis)
+        // TODO: add x-axis labels (non-trivial to do nice octave-spaced labels in ratatui; leaving for now)
+        let min_freq = SAMPLE_RATE as f64 / SAMPLE_HISTORY_SIZE as f64;
         let max_freq = SAMPLE_RATE as f64 / 2.0;
 
         let samples = sample_history.iter().map(|s| *s).collect();
