@@ -23,6 +23,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 use std::format;
+use std::rc::Rc;
 use std::{io::Result, sync::atomic::Ordering, time::Duration};
 
 const TICK_RATE: Duration = Duration::from_millis(50);
@@ -298,48 +299,8 @@ impl UI {
     fn exit(&mut self) {
         self.exit = true;
     }
-}
 
-impl Widget for &UI {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from(" Terminal Synth ".bold());
-        let instructions = Line::from(vec![
-            " Navigate ".into(),
-            "<↑/↓/←/→> ".bold(),
-            " Select Section ".into(),
-            "<Enter> ".bold(),
-            " Select Param ".into(),
-            "<←/→> ".bold(),
-            " Update Param ".into(),
-            "<↑/↓> ".bold(),
-            " Deselect Section ".into(),
-            "<Esc> ".bold(),
-            " Quit ".into(),
-            "<Ctrl+C> ".red().bold(),
-        ]);
-        let container = Block::bordered()
-            .title(title.centered())
-            .title_bottom(instructions.right_aligned())
-            .border_set(border::THICK);
-
-        let inner_area = container.inner(area);
-        container.render(area, buf);
-
-        let main_sections =
-            Layout::vertical([Constraint::Fill(1), Constraint::Length(8)]).split(inner_area);
-        let main_area = main_sections[0];
-        let log_area = main_sections[1];
-
-        let outer_columns = Layout::horizontal([
-            Constraint::Percentage(30),
-            Constraint::Percentage(40),
-            Constraint::Percentage(30),
-        ])
-        .flex(Flex::SpaceBetween);
-
-        let sections = outer_columns.split(main_area);
-
-        // render keyboard
+    fn render_keyboard(&self, area: Rect, buf: &mut Buffer) {
         let key_text = Line::from(vec![
             "Key: ".into(),
             self.last_key.to_string().green(),
@@ -398,13 +359,10 @@ impl Widget for &UI {
         Paragraph::new(keyboard)
             .left_aligned()
             .block(Block::bordered())
-            .render(sections[0], buf);
+            .render(area, buf);
+    }
 
-        // render controls: instrument row on top, effects grid below
-        let right_sections = Layout::vertical([Constraint::Length(7), Constraint::Fill(1)])
-            .spacing(1)
-            .split(sections[1]);
-
+    fn render_controls(&self, area: Rc<[Rect]>, buf: &mut Buffer) {
         let render_control_cell = |focus_i: usize,
                                    name: &str,
                                    parameters: Vec<crate::parameter::Parameter>,
@@ -452,9 +410,8 @@ impl Widget for &UI {
             }
         };
 
-        // instrument row
-        let instrument_cell = Layout::horizontal([Constraint::Max(80), Constraint::Fill(1)])
-            .split(right_sections[0])[0];
+        let instrument_cell =
+            Layout::horizontal([Constraint::Max(80), Constraint::Fill(1)]).split(area[0])[0];
         render_control_cell(
             0,
             "FM",
@@ -463,7 +420,6 @@ impl Widget for &UI {
             buf,
         );
 
-        // effects grid
         let effect_rows_layout = Layout::vertical(
             (0..self.controls_interface.effect_row_count).map(|_| Constraint::Length(7)),
         )
@@ -472,7 +428,7 @@ impl Widget for &UI {
             (0..self.controls_interface.effect_column_count).map(|_| Constraint::Length(24)),
         );
         let effect_cells: Vec<Rect> = effect_rows_layout
-            .split(right_sections[1])
+            .split(area[1])
             .iter()
             .flat_map(|&row| effect_cols_layout.split(row).to_vec())
             .collect();
@@ -489,8 +445,9 @@ impl Widget for &UI {
                 );
             }
         }
+    }
 
-        // visualizations
+    fn render_visualizations(&self, area: Rect, buf: &mut Buffer) {
         let sample_history = self.instrument.get_sample_history();
         let sample_history = sample_history.lock().unwrap();
         let data: Vec<(f64, f64)> = sample_history
@@ -517,10 +474,11 @@ impl Widget for &UI {
                     .style(Style::default().fg(Color::Gray))
                     .bounds([-1.0, 1.0]),
             )
-            .render(sections[2], buf);
+            .render(area, buf);
+    }
 
-        // render log panel
-        let visible_rows = log_area.height.saturating_sub(2) as usize;
+    fn render_log_panel(&self, area: Rect, buf: &mut Buffer) {
+        let visible_rows = area.height.saturating_sub(2) as usize;
         let log_lines: Vec<Line> = log::snapshot()
             .iter()
             .rev()
@@ -530,6 +488,54 @@ impl Widget for &UI {
             .collect();
         Paragraph::new(log_lines)
             .block(Block::bordered().title(" Log "))
-            .render(log_area, buf);
+            .render(area, buf);
+    }
+}
+
+impl Widget for &UI {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let title = Line::from(" Terminal Synth ".bold());
+        let instructions = Line::from(vec![
+            " Navigate ".into(),
+            "<↑/↓/←/→> ".bold(),
+            " Select Section ".into(),
+            "<Enter> ".bold(),
+            " Select Param ".into(),
+            "<←/→> ".bold(),
+            " Update Param ".into(),
+            "<↑/↓> ".bold(),
+            " Deselect Section ".into(),
+            "<Esc> ".bold(),
+            " Quit ".into(),
+            "<Ctrl+C> ".red().bold(),
+        ]);
+        let container = Block::bordered()
+            .title(title.centered())
+            .title_bottom(instructions.right_aligned())
+            .border_set(border::THICK);
+        let inner_area = container.inner(area);
+        let main_sections =
+            Layout::vertical([Constraint::Fill(1), Constraint::Length(8)]).split(inner_area);
+        let main_area = main_sections[0];
+        let log_area = main_sections[1];
+
+        let outer_columns = Layout::horizontal([
+            Constraint::Percentage(30),
+            Constraint::Percentage(40),
+            Constraint::Percentage(30),
+        ])
+        .flex(Flex::SpaceBetween);
+        let sections = outer_columns.split(main_area);
+
+        // control sections: instrument row on top, effects grid below
+        let control_subsections = Layout::vertical([Constraint::Length(7), Constraint::Fill(1)])
+            .spacing(1)
+            .split(sections[1]);
+
+        container.render(area, buf);
+        self.render_keyboard(sections[0], buf);
+        self.render_controls(control_subsections, buf);
+        self.render_visualizations(sections[2], buf);
+        self.render_log_panel(log_area, buf);
     }
 }
