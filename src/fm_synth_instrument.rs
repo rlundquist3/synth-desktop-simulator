@@ -1,5 +1,7 @@
+use std::collections::VecDeque;
 use std::f32::consts::PI;
 use std::fmt::Debug;
+use std::format;
 use std::num::NonZero;
 
 use std::sync::{Arc, Mutex, atomic::Ordering};
@@ -25,6 +27,8 @@ use crate::voices::Voices;
 const MOD_INDEX_OPTIONS: &[f32] = &[1.0, 2.0, PI, 4.0, 5.0, 2.0 * PI];
 const MOD_INDEX_RENDER: &[&str] = &["1", "2", "π", "4", "5", "2π"];
 
+pub const SAMPLE_HISTORY_SIZE: usize = 512;
+
 #[derive(Clone, Copy, Debug)]
 pub struct FreqRatio(pub f32, pub f32);
 
@@ -35,6 +39,7 @@ pub struct FMSynthInstrument {
     envelope: AmpEnvelope,
     parameters: Vec<Parameter>,
     pub effects: Vec<Box<dyn Effect>>,
+    sample_history: Arc<Mutex<VecDeque<f32>>>,
 }
 
 impl FMSynthInstrument {
@@ -71,7 +76,12 @@ impl FMSynthInstrument {
             headroom_gain: Box::new(Gain::new(-16.0)),
             envelope,
             effects,
+            sample_history: Arc::new(Mutex::new(VecDeque::from(vec![0.0; SAMPLE_HISTORY_SIZE]))),
         }
+    }
+
+    pub fn get_sample_history(&self) -> Arc<Mutex<VecDeque<f32>>> {
+        self.sample_history.clone()
     }
 }
 
@@ -83,6 +93,7 @@ impl Clone for FMSynthInstrument {
             headroom_gain: self.headroom_gain.clone_box(),
             envelope: self.envelope.clone(),
             effects: self.effects.iter().map(|e| e.clone_box()).collect(),
+            sample_history: self.sample_history.clone(),
         }
     }
 }
@@ -93,13 +104,17 @@ impl Iterator for FMSynthInstrument {
     fn next(&mut self) -> Option<f32> {
         let raw = self.voices.next()?;
         let headroom_corrected = self.headroom_gain.process(raw);
+        let sample = self
+            .effects
+            .iter_mut()
+            .fold(headroom_corrected, |sample, effect| effect.process(sample))
+            .clamp(-1.0, 1.0);
 
-        Some(
-            self.effects
-                .iter_mut()
-                .fold(headroom_corrected, |sample, effect| effect.process(sample))
-                .clamp(-1.0, 1.0),
-        )
+        let mut history = self.sample_history.lock().unwrap();
+        history.pop_front();
+        history.push_back(sample);
+
+        Some(sample)
     }
 }
 

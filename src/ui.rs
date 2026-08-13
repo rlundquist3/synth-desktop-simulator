@@ -1,4 +1,4 @@
-use crate::fm_synth_instrument::FMSynthInstrument;
+use crate::fm_synth_instrument::{FMSynthInstrument, SAMPLE_HISTORY_SIZE};
 use crate::log;
 use crate::parameter::ParameterChange::{Decrement, Increment};
 use crate::parameter::UserParameters;
@@ -11,6 +11,8 @@ use crossterm::{
     },
     execute,
 };
+use ratatui::symbols;
+use ratatui::widgets::{Axis, Chart, Dataset, GraphType};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
@@ -20,6 +22,7 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Paragraph, Widget},
 };
+use std::format;
 use std::{io::Result, sync::atomic::Ordering, time::Duration};
 
 const TICK_RATE: Duration = Duration::from_millis(50);
@@ -327,11 +330,14 @@ impl Widget for &UI {
         let main_area = main_sections[0];
         let log_area = main_sections[1];
 
-        let outer_columns =
-            Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)])
-                .flex(Flex::SpaceBetween);
+        let outer_columns = Layout::horizontal([
+            Constraint::Percentage(30),
+            Constraint::Percentage(40),
+            Constraint::Percentage(30),
+        ])
+        .flex(Flex::SpaceBetween);
 
-        let outer_cells = outer_columns.split(main_area);
+        let sections = outer_columns.split(main_area);
 
         // render keyboard
         let key_text = Line::from(vec![
@@ -340,7 +346,6 @@ impl Widget for &UI {
             " Freq: ".into(),
             self.last_freq.clone().blue(),
         ]);
-
         let black_key_render = Line::from(
             std::iter::once(Span::raw("  "))
                 .chain(BLACK_KEYS.iter().flat_map(|key| {
@@ -364,7 +369,6 @@ impl Widget for &UI {
                 )))
                 .collect::<Vec<_>>(),
         );
-
         let white_key_render = Line::from(
             WHITE_KEYS
                 .iter()
@@ -394,12 +398,12 @@ impl Widget for &UI {
         Paragraph::new(keyboard)
             .left_aligned()
             .block(Block::bordered())
-            .render(outer_cells[0], buf);
+            .render(sections[0], buf);
 
         // render controls: instrument row on top, effects grid below
         let right_sections = Layout::vertical([Constraint::Length(7), Constraint::Fill(1)])
             .spacing(1)
-            .split(outer_cells[1]);
+            .split(sections[1]);
 
         let render_control_cell = |focus_i: usize,
                                    name: &str,
@@ -485,6 +489,35 @@ impl Widget for &UI {
                 );
             }
         }
+
+        // visualizations
+        let sample_history = self.instrument.get_sample_history();
+        let sample_history = sample_history.lock().unwrap();
+        let data: Vec<(f64, f64)> = sample_history
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (i as f64, *v as f64))
+            .collect();
+
+        let dataset = Dataset::default()
+            .marker(symbols::Marker::Braille)
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::Red))
+            .data(&data);
+
+        Chart::new(vec![dataset])
+            .block(Block::bordered())
+            .x_axis(
+                Axis::default()
+                    .style(Style::default().fg(Color::Gray))
+                    .bounds([0.0, SAMPLE_HISTORY_SIZE as f64]),
+            )
+            .y_axis(
+                Axis::default()
+                    .style(Style::default().fg(Color::Gray))
+                    .bounds([-1.0, 1.0]),
+            )
+            .render(sections[2], buf);
 
         // render log panel
         let visible_rows = log_area.height.saturating_sub(2) as usize;

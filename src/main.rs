@@ -15,7 +15,7 @@ use rodio::DeviceSinkBuilder;
 use std::{io::Result, thread};
 
 // Hardcoded for now; TODO: make this configurable
-pub static SAMPLE_RATE: u32 = 44100;
+pub static SAMPLE_RATE: u32 = 44_100;
 
 fn main() -> Result<()> {
     let audio_device =
