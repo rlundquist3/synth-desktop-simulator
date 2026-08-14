@@ -62,7 +62,7 @@ impl Effect for Echo {
         let read_index = (self.write_index + max - delay_samples.min(max - 1)) % max;
         let delayed = self.buffer[read_index];
 
-        let result = sample + amp * delayed;
+        let result = sample - amp * delayed;
         self.buffer[self.write_index] = result;
         self.write_index = (self.write_index + 1) % max;
 

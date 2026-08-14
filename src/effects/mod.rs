@@ -1,7 +1,9 @@
 pub mod echo;
 pub mod filters;
 pub mod gain;
+pub mod reverb;
 pub mod soft_clipper;
+pub mod universal_comb_filter;
 
 use crate::parameter::UserParameters;
 

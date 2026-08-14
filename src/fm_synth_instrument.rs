@@ -17,6 +17,7 @@ use crate::effects::filters::low_pass;
 use crate::effects::filters::{band_pass, high_pass};
 use crate::effects::gain::Gain;
 use crate::effects::soft_clipper::SoftClipper;
+use crate::effects::universal_comb_filter::new_ap;
 use crate::fm_synth::FMSynth;
 use crate::parameter::{
     Parameter,
@@ -72,8 +73,8 @@ impl FMSynthInstrument {
                     (0.0, (MOD_INDEX_OPTIONS.len() - 1) as f32),
                     |v| format!("{}", MOD_INDEX_RENDER[v as usize]),
                 ),
-                Parameter::new("LFO Amp", 0.0, 0.1, (0.0, 5.0), |v| format!("{:.1}", v)),
-                Parameter::new("LFO Freq", 0.0, 1.0, (0.0, 20.0), |v| format!("{:.0}Hz", v)),
+                Parameter::new("LFO Amp", 0.0, 0.025, (0.0, 5.0), |v| format!("{:.3}", v)),
+                Parameter::new("LFO Freq", 0.0, 1.0, (0.0, 8.0), |v| format!("{:.0}Hz", v)),
             ],
             headroom_gain: Box::new(Gain::new(-16.0)),
             envelope,
