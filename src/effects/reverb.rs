@@ -1,5 +1,11 @@
 use crate::{
-    effects::Effect,
+    effects::{
+        Effect, EffectComponent,
+        effect_components::{
+            low_pass_feedback_comb_filter::LBCF,
+            universal_comb_filter::{UCF, new_ap},
+        },
+    },
     parameter::{
         Parameter,
         ParameterChange::{self, Decrement, Increment},
@@ -7,24 +13,43 @@ use crate::{
     },
 };
 
+// Adapted from https://ccrma.stanford.edu/~jos/pasp/Freeverb.html
+
 #[derive(Debug)]
 pub struct Reverb {
+    lbcf_array: Vec<LBCF>,
+    ap_array: Vec<UCF>,
     parameters: Vec<Parameter>,
 }
 
 impl Reverb {
     pub fn new() -> Self {
         Reverb {
-            parameters: vec![Parameter::new(
-                "Toggle",
-                0.0,
-                1.0,
-                (0.0, 1.0),
-                |v| match v {
+            lbcf_array: vec![
+                LBCF::new(0.84, 0.2, 1557),
+                LBCF::new(0.84, 0.2, 1617),
+                LBCF::new(0.84, 0.2, 1491),
+                LBCF::new(0.84, 0.2, 1422),
+                LBCF::new(0.84, 0.2, 1277),
+                LBCF::new(0.84, 0.2, 1356),
+                LBCF::new(0.84, 0.2, 1188),
+                LBCF::new(0.84, 0.2, 1116),
+            ],
+            ap_array: vec![
+                new_ap(0.5, 225),
+                new_ap(0.5, 556),
+                new_ap(0.5, 441),
+                new_ap(0.5, 341),
+            ],
+            parameters: vec![
+                Parameter::new("Toggle", 0.0, 1.0, (0.0, 1.0), |v| match v {
                     1.0 => format!("on"),
                     _ => format!("off"),
-                },
-            )],
+                }),
+                Parameter::new("Dry/Wet", 0.5, 0.05, (0.0, 1.0), |v| {
+                    format!("{:.2}/{:.2}", 1.0 - v, v)
+                }),
+            ],
         }
     }
 }
@@ -32,6 +57,8 @@ impl Reverb {
 impl Effect for Reverb {
     fn clone_box(&self) -> Box<dyn Effect> {
         Box::new(Reverb {
+            lbcf_array: self.lbcf_array.clone(),
+            ap_array: self.ap_array.clone(),
             parameters: self.parameters.clone(),
         })
     }
@@ -43,11 +70,22 @@ impl Effect for Reverb {
             return sample;
         }
 
-        sample
+        let lbcf_sum_result = self
+            .lbcf_array
+            .iter_mut()
+            .fold(0.0, |acc, lbcf| acc + lbcf.process(sample));
+        let ap_chain_result = self
+            .ap_array
+            .iter_mut()
+            .fold(lbcf_sum_result, |acc, ap| ap.process(acc));
+
+        let wet = self.parameters[1].get_value();
+        let dry = 1.0 - wet;
+        dry.sqrt() * sample + 1.5 * wet.sqrt() * ap_chain_result
     }
 
     fn get_name(&self) -> String {
-        String::from("Universal Comb Filter")
+        String::from("Reverb")
     }
 }
 

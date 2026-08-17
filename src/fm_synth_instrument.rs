@@ -16,6 +16,7 @@ use crate::effects::echo::Echo;
 use crate::effects::filters::low_pass;
 use crate::effects::filters::{band_pass, high_pass};
 use crate::effects::gain::Gain;
+use crate::effects::reverb::Reverb;
 use crate::effects::soft_clipper::SoftClipper;
 use crate::effects::universal_comb_filter::new_ap;
 use crate::fm_synth::FMSynth;
@@ -60,6 +61,7 @@ impl FMSynthInstrument {
         effects.push(Box::new(band_pass::new(800.0, 1.0)));
         effects.push(Box::new(SoftClipper::new(3.0)));
         effects.push(Box::new(Echo::new(0.0, 0.0)));
+        effects.push(Box::new(Reverb::new()));
 
         FMSynthInstrument {
             voices,
