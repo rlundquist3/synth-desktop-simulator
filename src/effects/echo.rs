@@ -18,8 +18,7 @@ pub struct Echo {
 }
 
 impl Echo {
-    pub fn new(delay: f32, amp: f32) -> Self {
-        let delay_secs = delay / SAMPLE_RATE as f32;
+    pub fn new(delay_secs: f32, amp: f32) -> Self {
         let max_samples = (MAX_DELAY_SECS * SAMPLE_RATE as f32) as usize;
 
         Echo {
