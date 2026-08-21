@@ -54,7 +54,7 @@ impl EffectComponent for LFODelay {
         }
 
         // linear interpolation of delayed samples
-        let i_0 = read_index_float.floor() as usize;
+        let i_0 = read_index_float.floor() as usize % self.buffer.len();
         let i_1 = (i_0 + 1) % self.buffer.len();
         let f = read_index_float - i_0 as f32;
         let delayed = (1.0 - f) * self.buffer[i_0] + f * self.buffer[i_1];

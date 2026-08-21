@@ -1,3 +1,4 @@
+pub mod chorus;
 pub mod echo;
 mod effect_components;
 pub mod filters;
@@ -6,6 +7,7 @@ pub mod gain;
 pub mod reverb;
 pub mod soft_clipper;
 pub mod universal_comb_filter;
+pub mod vibrato;
 
 use crate::parameter::UserParameters;
 

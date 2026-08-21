@@ -12,6 +12,7 @@ use rodio::Source;
 use crate::SAMPLE_RATE;
 use crate::amp_envelope::AmpEnvelope;
 use crate::effects::Effect;
+use crate::effects::chorus::Chorus;
 use crate::effects::echo::Echo;
 use crate::effects::filters::low_pass;
 use crate::effects::filters::{band_pass, high_pass};
@@ -19,6 +20,7 @@ use crate::effects::flanger::Flanger;
 use crate::effects::gain::Gain;
 use crate::effects::reverb::Reverb;
 use crate::effects::soft_clipper::SoftClipper;
+use crate::effects::vibrato::Vibrato;
 use crate::fm_synth::FMSynth;
 use crate::parameter::{
     Parameter,
@@ -62,6 +64,8 @@ impl FMSynthInstrument {
         effects.push(Box::new(SoftClipper::new(3.0)));
         effects.push(Box::new(Echo::new(0.2, 0.5)));
         effects.push(Box::new(Reverb::new()));
+        effects.push(Box::new(Vibrato::new(5.0, 0.1, 5.0)));
+        effects.push(Box::new(Chorus::new()));
         effects.push(Box::new(Flanger::new(3.0, 0.1, 0.2)));
 
         FMSynthInstrument {
