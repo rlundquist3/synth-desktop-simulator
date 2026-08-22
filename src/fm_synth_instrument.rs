@@ -12,10 +12,15 @@ use rodio::Source;
 use crate::SAMPLE_RATE;
 use crate::amp_envelope::AmpEnvelope;
 use crate::effects::Effect;
+use crate::effects::chorus::Chorus;
 use crate::effects::echo::Echo;
 use crate::effects::filters::low_pass;
 use crate::effects::filters::{band_pass, high_pass};
+use crate::effects::flanger::Flanger;
 use crate::effects::gain::Gain;
+use crate::effects::reverb::Reverb;
+use crate::effects::soft_clipper::SoftClipper;
+use crate::effects::vibrato::Vibrato;
 use crate::fm_synth::FMSynth;
 use crate::parameter::{
     Parameter,
@@ -56,7 +61,12 @@ impl FMSynthInstrument {
         effects.push(Box::new(low_pass::new(200.0, 1.0)));
         effects.push(Box::new(high_pass::new(1000.0, 1.0)));
         effects.push(Box::new(band_pass::new(800.0, 1.0)));
-        effects.push(Box::new(Echo::new(0.0, 0.0)));
+        effects.push(Box::new(SoftClipper::new(3.0)));
+        effects.push(Box::new(Echo::new(0.2, 0.5)));
+        effects.push(Box::new(Reverb::new()));
+        effects.push(Box::new(Vibrato::new(5.0, 0.1, 5.0)));
+        effects.push(Box::new(Chorus::new()));
+        effects.push(Box::new(Flanger::new(3.0, 0.1, 0.2)));
 
         FMSynthInstrument {
             voices,
@@ -70,8 +80,8 @@ impl FMSynthInstrument {
                     (0.0, (MOD_INDEX_OPTIONS.len() - 1) as f32),
                     |v| format!("{}", MOD_INDEX_RENDER[v as usize]),
                 ),
-                Parameter::new("LFO Amp", 0.0, 0.1, (0.0, 5.0), |v| format!("{:.1}", v)),
-                Parameter::new("LFO Freq", 0.0, 1.0, (0.0, 20.0), |v| format!("{:.0}Hz", v)),
+                Parameter::new("LFO Amp", 0.0, 0.025, (0.0, 5.0), |v| format!("{:.3}", v)),
+                Parameter::new("LFO Freq", 0.0, 1.0, (0.0, 8.0), |v| format!("{:.0}Hz", v)),
             ],
             headroom_gain: Box::new(Gain::new(-16.0)),
             envelope,
