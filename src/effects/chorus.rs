@@ -15,11 +15,13 @@ use crate::{
 const DELAY_RANGE: Range<f32> = 20.0..40.0;
 const AMP_RANGE: Range<f32> = 0.05..0.2;
 const FREQ_RANGE: Range<f32> = 0.1..4.0;
+const MATCH_THRESHOLD: f32 = 0.01;
 
 #[derive(Debug)]
 pub struct Chorus {
     voices: Vec<LFODelay>,
     voice_parameters: Vec<Parameter>,
+    voice_parameter_targets: Vec<(f32, f32)>,
     parameters: Vec<Parameter>,
 }
 
@@ -37,44 +39,65 @@ impl Chorus {
 
         let mut voice_parameters = Vec::new();
         let mut voices = Vec::new();
-        for _ in 0..4 {
-            let d = Parameter::new(
-                "Delay",
-                random_range(DELAY_RANGE),
-                1.0,
-                (DELAY_RANGE.start, DELAY_RANGE.end),
-                |v| format!("{:.0}ms", v),
-            );
-            let a = Parameter::new(
-                "Amp",
-                random_range(AMP_RANGE),
-                0.05,
-                (AMP_RANGE.start, AMP_RANGE.end),
-                |v| format!("{:.2}", v),
-            );
-            let f = Parameter::new(
-                "Freq",
-                random_range(FREQ_RANGE),
-                0.1,
-                (FREQ_RANGE.start, FREQ_RANGE.end),
-                |v| format!("{:.1}Hz", v),
-            );
+        let mut voice_parameter_targets = Vec::new();
 
-            voice_parameters.push(d.clone());
-            voice_parameters.push(a.clone());
-            voice_parameters.push(f.clone());
-            voices.push(LFODelay::new(d, a, f))
+        for _ in 0..4 {
+            let d = random_range(DELAY_RANGE);
+            let a = random_range(AMP_RANGE);
+            let f = random_range(FREQ_RANGE);
+
+            let delay_param =
+                Parameter::new("Delay", d, 1.0, (DELAY_RANGE.start, DELAY_RANGE.end), |v| {
+                    format!("{:.0}ms", v)
+                });
+            let amp_param = Parameter::new("Amp", a, 0.05, (AMP_RANGE.start, AMP_RANGE.end), |v| {
+                format!("{:.2}", v)
+            });
+            let freq_param =
+                Parameter::new("Freq", f, 0.1, (FREQ_RANGE.start, FREQ_RANGE.end), |v| {
+                    format!("{:.1}Hz", v)
+                });
+
+            voice_parameters.push(delay_param.clone());
+            voice_parameters.push(amp_param.clone());
+            voice_parameters.push(freq_param.clone());
+            voice_parameter_targets.push((d, 0.0));
+            voice_parameter_targets.push((a, 0.0));
+            voice_parameter_targets.push((f, 0.0));
+            voices.push(LFODelay::new(delay_param, amp_param, freq_param));
         }
 
         Chorus {
             voices,
             voice_parameters,
+            voice_parameter_targets,
             parameters,
         }
     }
 
-    fn tick(&mut self) {
-        // TODO: update voice parameters randomly and smoothly
+    fn adjust_parameters(&mut self) {
+        self.voice_parameters
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, p)| {
+                let current = p.get_value();
+                let (target, step) = self.voice_parameter_targets[i];
+
+                if (target - current).abs() < MATCH_THRESHOLD {
+                    let range = match i % 3 {
+                        0 => DELAY_RANGE,
+                        1 => AMP_RANGE,
+                        2 => FREQ_RANGE,
+                        _ => DELAY_RANGE,
+                    };
+                    let new_target = random_range(range);
+                    let new_step =
+                        (new_target - current) / (random_range(1.0..5.0) * SAMPLE_RATE as f32);
+                    self.voice_parameter_targets[i] = (new_target, new_step);
+                } else {
+                    p.set_value(current + step);
+                }
+            });
     }
 }
 
@@ -83,6 +106,7 @@ impl Effect for Chorus {
         Box::new(Chorus {
             voices: self.voices.clone(),
             voice_parameters: self.voice_parameters.clone(),
+            voice_parameter_targets: self.voice_parameter_targets.clone(),
             parameters: self.parameters.clone(),
         })
     }
@@ -94,7 +118,7 @@ impl Effect for Chorus {
             return sample;
         }
 
-        self.tick();
+        self.adjust_parameters();
 
         let wet = self.parameters[1].get_value() / self.voices.len() as f32;
         let dry = 1.0 - self.parameters[1].get_value();
