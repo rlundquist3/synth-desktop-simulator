@@ -13,7 +13,7 @@ At this time, MIDI may be used for note events, but not control change events (i
 Requires [Rust & Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 
 ```bash
-cargo build # optional
+cargo build
 cargo run
 ```
 

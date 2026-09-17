@@ -68,25 +68,24 @@ impl Midi {
         let ports = midi_in.ports();
         let port = match ports.len() {
             0 => return Err(MidiInputError::NoPortFound),
-            1 => {
+            _ => {
                 log::push(format!(
                     "1 midi input port found: {}",
                     midi_in.port_name(&ports[0]).unwrap()
                 ));
                 &ports[0]
-            }
-            _ => {
-                log::push("Available MIDI input ports:");
-                for (i, p) in ports.iter().enumerate() {
-                    log::push(format!("{}: {}", i, midi_in.port_name(p).unwrap()));
-                }
-                log::push("Please select MIDI input port: ");
-                stdout().flush()?;
-                stdin().read_line(&mut input)?;
-                ports
-                    .get(input.trim().parse::<usize>()?)
-                    .ok_or(MidiInputError::InvalidPortSelected)?
-            }
+            } // _ => {
+              //     log::push("Available MIDI input ports:");
+              //     for (i, p) in ports.iter().enumerate() {
+              //         log::push(format!("{}: {}", i, midi_in.port_name(p).unwrap()));
+              //     }
+              //     log::push("Please select MIDI input port: ");
+              //     stdout().flush()?;
+              //     stdin().read_line(&mut input)?;
+              //     ports
+              //         .get(input.trim().parse::<usize>()?)
+              //         .ok_or(MidiInputError::InvalidPortSelected)?
+              // }
         };
 
         log::push("Opening MIDI connection");

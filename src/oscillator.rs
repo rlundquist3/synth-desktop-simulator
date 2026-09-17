@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use crate::{SAMPLE_RATE, voices::Voice};
+use crate::{voices::Voice, SAMPLE_RATE};
 
 #[derive(Clone, Debug)]
 pub enum Waveform {

@@ -2076,7 +2076,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "terminal_synth"
+name = "terminal-synth"
 version = "0.1.0"
 dependencies = [
  "crossterm",
