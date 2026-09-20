@@ -1,9 +1,5 @@
-use crate::fm_synth_instrument::{FMSynthInstrument, SAMPLE_HISTORY_SIZE};
-use crate::parameter::ParameterChange::{Decrement, Increment};
-use crate::parameter::UserParameters;
+use crate::log;
 use crate::utils::{A440, get_freq_for_note, get_mag_spectrum};
-use crate::voices::Voice;
-use crate::{SAMPLE_RATE, log};
 use crossterm::{
     event::{
         self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
@@ -24,6 +20,16 @@ use ratatui::{
 };
 use std::{format, vec};
 use std::{io::Result, sync::atomic::Ordering, time::Duration};
+use synth_core::parameter::Parameter;
+use synth_core::{
+    SAMPLE_RATE,
+    engines::fm::FMSynth,
+    parameter::{
+        ParameterChange::{Decrement, Increment},
+        UserParameters,
+    },
+    voices::Voice,
+};
 
 const TICK_RATE: Duration = Duration::from_millis(50);
 
@@ -122,7 +128,7 @@ impl Controls {
 
 #[derive(Debug)]
 pub struct UI {
-    instrument: FMSynthInstrument,
+    instrument: FMSynth,
     last_key: char,
     last_freq: String,
     controls_interface: Controls,
@@ -130,9 +136,9 @@ pub struct UI {
 }
 
 impl UI {
-    pub fn new(instrument: FMSynthInstrument) -> Self {
+    pub fn new(instrument: FMSynth) -> Self {
         UI {
-            controls_interface: Controls::new(instrument.effects.len()),
+            controls_interface: Controls::new(0),
             instrument,
             last_key: '_',
             last_freq: String::from("_"),
@@ -211,13 +217,8 @@ impl UI {
             if let Some(pressed_key) = key_event.code.as_char() {
                 self.last_key = pressed_key;
                 self.last_freq = format!("{freq}");
-                let mut voice = self
-                    .instrument
-                    .voices
-                    .voice_on(pressed_key as u8)
-                    .lock()
-                    .unwrap();
-                voice.set_freq(freq);
+                let mut voice = self.instrument.voices.voice_on(pressed_key as u8);
+                voice.set_freq(freq, 60);
                 voice.on.store(true, Ordering::Relaxed);
             }
         }
@@ -249,7 +250,7 @@ impl UI {
                     _ => (),
                 }
             } else {
-                let effect = &mut self.instrument.effects[self.controls_interface.focus_index - 1];
+                /*let effect = &mut self.instrument.effects[self.controls_interface.focus_index - 1];
                 let params = effect.get_parameters();
 
                 match key_event.code {
@@ -271,7 +272,7 @@ impl UI {
                         effect.update_parameter(param_index, Decrement);
                     }
                     _ => (),
-                }
+                }*/
             }
         } else {
             match key_event.code {
@@ -289,7 +290,7 @@ impl UI {
         if let Some(k) = key_event.code.as_char() {
             if ALL_KEYS.contains(&k) {
                 if let Some(voice) = self.instrument.voices.voice_off(k as u8) {
-                    voice.lock().unwrap().on.store(false, Ordering::Relaxed);
+                    voice.on.store(false, Ordering::Relaxed);
                 }
             }
         }
@@ -368,7 +369,7 @@ impl UI {
 
         let render_control_cell = |focus_i: usize,
                                    name: &str,
-                                   parameters: Vec<crate::parameter::Parameter>,
+                                   parameters: Vec<Parameter>,
                                    cell: Rect,
                                    buf: &mut Buffer| {
             let container = if focus_i == self.controls_interface.focus_index {
@@ -436,7 +437,7 @@ impl UI {
             .flat_map(|&row| effect_cols_layout.split(row).to_vec())
             .collect();
 
-        for (j, cell) in effect_cells.iter().enumerate() {
+        /*for (j, cell) in effect_cells.iter().enumerate() {
             if j < self.instrument.effects.len() {
                 let effect = &self.instrument.effects[j];
                 render_control_cell(
@@ -447,10 +448,10 @@ impl UI {
                     buf,
                 );
             }
-        }
+        }*/
     }
 
-    fn render_visualizations(&self, area: Rect, buf: &mut Buffer) {
+    /*fn render_visualizations(&self, area: Rect, buf: &mut Buffer) {
         let visualization_subsections =
             Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .spacing(1)
@@ -518,7 +519,7 @@ impl UI {
                     .title("magnitude"),
             )
             .render(visualization_subsections[1], buf);
-    }
+    }*/
 
     fn render_log_panel(&self, area: Rect, buf: &mut Buffer) {
         let visible_rows = area.height.saturating_sub(2) as usize;
@@ -573,7 +574,7 @@ impl Widget for &UI {
         container.render(area, buf);
         self.render_keyboard(sections[0], buf);
         self.render_controls(sections[1], buf);
-        self.render_visualizations(sections[2], buf);
+        // self.render_visualizations(sections[2], buf);
         self.render_log_panel(log_area, buf);
     }
 }

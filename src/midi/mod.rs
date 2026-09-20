@@ -1,4 +1,4 @@
-use crate::{fm_synth_instrument::FMSynthInstrument, log, voices::Voice};
+use crate::log;
 use midir::{ConnectError, Ignore, InitError, MidiInput, PortInfoError};
 use std::{
     io::{Error, Write, stdin, stdout},
@@ -6,6 +6,7 @@ use std::{
     sync::atomic::Ordering,
     thread,
 };
+use synth_core::{engines::fm::FMSynth, voices::Voice};
 
 mod notes;
 
@@ -48,13 +49,13 @@ impl From<Error> for MidiInputError {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Midi {
-    instrument: FMSynthInstrument,
+    instrument: FMSynth,
 }
 
 impl Midi {
-    pub fn new(instrument: FMSynthInstrument) -> Self {
+    pub fn new(instrument: FMSynth) -> Self {
         Midi { instrument }
     }
 
@@ -127,8 +128,9 @@ impl Midi {
         log::push(format!("note on {message:?}"));
 
         let MidiMessage(_status, note, _vel) = message;
-        let mut voice = self.instrument.voices.voice_on(note).lock().unwrap();
-        voice.set_freq(notes::MIDI_NOTE_FREQS[note as usize]);
+
+        let mut voice = self.instrument.voices.voice_on(note);
+        voice.set_freq(notes::MIDI_NOTE_FREQS[note as usize], note as usize);
         voice.on.store(true, Ordering::Relaxed);
     }
 
@@ -137,7 +139,7 @@ impl Midi {
 
         let MidiMessage(_status, note, _vel) = message;
         if let Some(voice) = self.instrument.voices.voice_off(note) {
-            voice.lock().unwrap().on.store(false, Ordering::Relaxed);
+            voice.on.store(false, Ordering::Relaxed);
         }
     }
 
