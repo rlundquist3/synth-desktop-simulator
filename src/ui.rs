@@ -32,7 +32,7 @@ use synth_core::{
     engines::fm::FMSynth,
     midi::{MIDI_NOTE_FREQS, MidiMessage},
     parameter::{
-        self,
+        Parameter,
         ParameterChange::{Decrement, Increment},
         UserParameters,
     },
@@ -398,7 +398,7 @@ impl UI {
             .render(area, buf);
     }
 
-    /*fn render_controls(&self, area: Rect, buf: &mut Buffer) {
+    fn render_controls(&self, area: Rect, buf: &mut Buffer) {
         let control_subsections = Layout::vertical([Constraint::Length(7), Constraint::Fill(1)])
             .spacing(1)
             .split(area);
@@ -452,13 +452,10 @@ impl UI {
 
         let instrument_cell = Layout::horizontal([Constraint::Max(80), Constraint::Fill(1)])
             .split(control_subsections[0])[0];
-        render_control_cell(
-            0,
-            "FM",
-            self.instrument.get_parameters(),
-            instrument_cell,
-            buf,
-        );
+        let e = self.engine.lock().unwrap();
+        let mut engine = e.borrow_mut();
+        let params = engine.get_parameters();
+        render_control_cell(0, "FM", params, instrument_cell, buf);
 
         let effect_rows_layout = Layout::vertical(
             (0..self.controls_interface.effect_row_count).map(|_| Constraint::Length(7)),
@@ -485,7 +482,7 @@ impl UI {
                 );
             }
         }*/
-    }*/
+    }
 
     /*fn render_visualizations(&self, area: Rect, buf: &mut Buffer) {
         let visualization_subsections =
@@ -609,7 +606,7 @@ impl Widget for &UI {
 
         container.render(area, buf);
         self.render_keyboard(sections[0], buf);
-        // self.render_controls(sections[1], buf);
+        self.render_controls(sections[1], buf);
         // self.render_visualizations(sections[2], buf);
         self.render_log_panel(log_area, buf);
     }
