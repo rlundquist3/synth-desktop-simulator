@@ -1,7 +1,6 @@
 use rustfft::{FftPlanner, num_complex::Complex};
 use std::f32::consts::PI;
-
-use crate::SAMPLE_RATE;
+use synth_core::SAMPLE_RATE;
 
 pub const A440: f32 = 440.0;
 

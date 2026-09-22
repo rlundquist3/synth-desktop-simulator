@@ -1,35 +1,34 @@
-mod amp_envelope;
-mod effects;
-mod fm_synth;
-mod fm_synth_instrument;
+mod audio;
 mod log;
 mod midi;
-mod oscillator;
-mod parameter;
 mod ui;
 mod utils;
-mod voices;
 
-use crate::{fm_synth_instrument::FMSynthInstrument, midi::Midi, ui::UI};
-use rodio::DeviceSinkBuilder;
-use std::{io::Result, thread};
+use crate::{
+    audio::audio_handler,
+    midi::{midi_input_task, tasks::midi_buffer_handler},
+    ui::UI,
+};
+use static_cell::StaticCell;
+use std::{cell::RefCell, sync::Mutex};
+use synth_core::engines::fm::FMSynth;
 
-// Hardcoded for now; TODO: make this configurable
-pub static SAMPLE_RATE: u32 = 44_100;
+pub static ENGINE: StaticCell<Mutex<RefCell<FMSynth>>> = StaticCell::new();
 
-fn main() -> Result<()> {
-    let audio_device =
-        DeviceSinkBuilder::open_default_sink().expect("Should open default audio device");
-    let instrument = FMSynthInstrument::new();
-    audio_device.mixer().add(instrument.clone());
+#[tokio::main]
+async fn main() {
+    let engine: &'static Mutex<RefCell<FMSynth>> =
+        ENGINE.init(Mutex::new(RefCell::new(FMSynth::new())));
 
-    let mut ui = UI::new(instrument.clone());
-    let midi = Midi::new(instrument.clone());
+    tokio::spawn(audio_handler(engine));
+    tokio::spawn(midi_input_task());
+    tokio::spawn(midi_buffer_handler(engine));
 
-    thread::spawn(|| match midi.read_input() {
-        Ok(_) => (),
-        Err(err) => log::push(format!("Error: {:?}", err)),
-    });
-
-    ratatui::run(|terminal| ui.run(terminal))
+    tokio::task::spawn_blocking(move || {
+        let mut ui = UI::new(engine);
+        ratatui::run(|terminal| ui.run(terminal))
+    })
+    .await
+    .unwrap()
+    .unwrap();
 }
