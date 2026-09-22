@@ -1,11 +1,13 @@
-use crate::log;
+use crate::midi::MIDI_BUFFER;
 use crate::utils::{A440, get_freq_for_note, get_mag_spectrum};
+use crate::{ENGINE, log};
 use crossterm::{
     event::{
         self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
         PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
     execute,
+    terminal::supports_keyboard_enhancement,
 };
 use ratatui::symbols;
 use ratatui::widgets::{Axis, Chart, Dataset, GraphType};
@@ -18,13 +20,19 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Paragraph, Widget},
 };
-use std::{format, vec};
+use std::{
+    cell::RefCell,
+    format,
+    sync::{Arc, Mutex},
+    vec,
+};
 use std::{io::Result, sync::atomic::Ordering, time::Duration};
-use synth_core::parameter::Parameter;
 use synth_core::{
     SAMPLE_RATE,
     engines::fm::FMSynth,
+    midi::{MIDI_NOTE_FREQS, MidiMessage},
     parameter::{
+        self,
         ParameterChange::{Decrement, Increment},
         UserParameters,
     },
@@ -126,22 +134,61 @@ impl Controls {
     }
 }
 
+/// Maps a computer keyboard key to its corresponding MIDI note
+fn get_midi_note_for_key(code: KeyCode) -> Option<u8> {
+    match code {
+        KeyCode::Char('q') => Some(53), // F
+        KeyCode::Char('2') => Some(54),
+        KeyCode::Char('w') => Some(55), // G
+        KeyCode::Char('3') => Some(56),
+        KeyCode::Char('e') => Some(57), // A
+        KeyCode::Char('4') => Some(58),
+        KeyCode::Char('r') => Some(59), // B
+        KeyCode::Char('t') => Some(60), // Middle C
+        KeyCode::Char('6') => Some(61),
+        KeyCode::Char('y') => Some(62), // D
+        KeyCode::Char('7') => Some(63),
+        KeyCode::Char('u') => Some(64), // E
+        KeyCode::Char('i') => Some(65), // F
+        KeyCode::Char('9') => Some(66),
+        KeyCode::Char('o') => Some(67), // G
+        KeyCode::Char('0') => Some(68),
+        KeyCode::Char('p') => Some(69), // A
+        KeyCode::Char('-') => Some(70),
+        KeyCode::Char('[') => Some(71), // B
+        KeyCode::Char(']') => Some(72), // C
+        _ => None,
+    }
+}
+
+/// Sends the computer keyboard events to `MIDI_BUFFER`
+fn send_midi(message: MidiMessage) {
+    match MIDI_BUFFER.try_send(message) {
+        Ok(()) => {}
+        Err(_) => log::push("MIDI buffer full"),
+    };
+}
+
 #[derive(Debug)]
 pub struct UI {
-    instrument: FMSynth,
+    engine: &'static Mutex<RefCell<FMSynth>>,
     last_key: char,
     last_freq: String,
     controls_interface: Controls,
+    key_release_reported: bool,
+    held_note: Option<u8>,
     exit: bool,
 }
 
 impl UI {
-    pub fn new(instrument: FMSynth) -> Self {
+    pub fn new(engine: &'static Mutex<RefCell<FMSynth>>) -> Self {
         UI {
+            engine,
             controls_interface: Controls::new(0),
-            instrument,
             last_key: '_',
             last_freq: String::from("_"),
+            key_release_reported: false,
+            held_note: None,
             exit: false,
         }
     }
@@ -151,6 +198,11 @@ impl UI {
             std::io::stdout(),
             PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
         )?;
+
+        self.key_release_reported = supports_keyboard_enhancement().unwrap_or(false);
+        if !self.key_release_reported {
+            log::push("Terminal does not report key releases; keyboard is monophonic");
+        }
 
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
@@ -189,45 +241,30 @@ impl UI {
             self.exit();
         }
 
-        let freq = match key_event.code {
-            KeyCode::Char('q') => get_freq_for_note(-4), // F
-            KeyCode::Char('2') => get_freq_for_note(-3),
-            KeyCode::Char('w') => get_freq_for_note(-2), // G
-            KeyCode::Char('3') => get_freq_for_note(-1),
-            KeyCode::Char('e') => A440, // A
-            KeyCode::Char('4') => get_freq_for_note(1),
-            KeyCode::Char('r') => get_freq_for_note(2), // B
-            KeyCode::Char('t') => get_freq_for_note(3), // C
-            KeyCode::Char('6') => get_freq_for_note(4),
-            KeyCode::Char('y') => get_freq_for_note(5), // D
-            KeyCode::Char('7') => get_freq_for_note(6),
-            KeyCode::Char('u') => get_freq_for_note(7), // E
-            KeyCode::Char('i') => get_freq_for_note(8), // F
-            KeyCode::Char('9') => get_freq_for_note(9),
-            KeyCode::Char('o') => get_freq_for_note(10), // G
-            KeyCode::Char('0') => get_freq_for_note(11),
-            KeyCode::Char('p') => get_freq_for_note(12), // A
-            KeyCode::Char('-') => get_freq_for_note(13),
-            KeyCode::Char('[') => get_freq_for_note(14), // B
-            KeyCode::Char(']') => get_freq_for_note(15), // C
-            _ => 0.0,
-        };
-
-        if freq > 0.0 {
+        if let Some(midi_note) = get_midi_note_for_key(key_event.code) {
             if let Some(pressed_key) = key_event.code.as_char() {
+                let freq = MIDI_NOTE_FREQS[midi_note as usize];
                 self.last_key = pressed_key;
                 self.last_freq = format!("{freq}");
-                let mut voice = self.instrument.voices.voice_on(pressed_key as u8);
-                voice.set_freq(freq, 60);
-                voice.on.store(true, Ordering::Relaxed);
             }
+
+            // Without release events, release the previous note before starting this one
+            if !self.key_release_reported {
+                if let Some(held_note) = self.held_note.replace(midi_note) {
+                    send_midi(MidiMessage(128, held_note, 0));
+                }
+            }
+
+            send_midi(MidiMessage(144, midi_note, 100));
         }
 
         if self.controls_interface.is_editing {
             let param_index = self.controls_interface.param_focus_index;
 
             if self.controls_interface.focus_index == 0 {
-                let params = self.instrument.get_parameters();
+                let e = self.engine.lock().unwrap();
+                let mut engine = e.borrow_mut();
+                let params = engine.get_parameters();
 
                 match key_event.code {
                     KeyCode::Esc => self.controls_interface.deselect(),
@@ -242,10 +279,10 @@ impl UI {
                         }
                     }
                     KeyCode::Up => {
-                        self.instrument.update_parameter(param_index, Increment);
+                        engine.update_parameter(param_index, Increment);
                     }
                     KeyCode::Down => {
-                        self.instrument.update_parameter(param_index, Decrement);
+                        engine.update_parameter(param_index, Decrement);
                     }
                     _ => (),
                 }
@@ -287,12 +324,11 @@ impl UI {
     }
 
     fn handle_key_release(&mut self, key_event: KeyEvent) {
-        if let Some(k) = key_event.code.as_char() {
-            if ALL_KEYS.contains(&k) {
-                if let Some(voice) = self.instrument.voices.voice_off(k as u8) {
-                    voice.on.store(false, Ordering::Relaxed);
-                }
+        if let Some(midi_note) = get_midi_note_for_key(key_event.code) {
+            if self.held_note == Some(midi_note) {
+                self.held_note = None;
             }
+            send_midi(MidiMessage(128, midi_note, 0));
         }
     }
 
@@ -362,7 +398,7 @@ impl UI {
             .render(area, buf);
     }
 
-    fn render_controls(&self, area: Rect, buf: &mut Buffer) {
+    /*fn render_controls(&self, area: Rect, buf: &mut Buffer) {
         let control_subsections = Layout::vertical([Constraint::Length(7), Constraint::Fill(1)])
             .spacing(1)
             .split(area);
@@ -449,7 +485,7 @@ impl UI {
                 );
             }
         }*/
-    }
+    }*/
 
     /*fn render_visualizations(&self, area: Rect, buf: &mut Buffer) {
         let visualization_subsections =
@@ -573,7 +609,7 @@ impl Widget for &UI {
 
         container.render(area, buf);
         self.render_keyboard(sections[0], buf);
-        self.render_controls(sections[1], buf);
+        // self.render_controls(sections[1], buf);
         // self.render_visualizations(sections[2], buf);
         self.render_log_panel(log_area, buf);
     }
