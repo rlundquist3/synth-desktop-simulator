@@ -67,7 +67,7 @@ pub async fn midi_input_task() {
     };
 
     log::push(format!(
-        "MIDI onnection open, reading input from '{port_name}'..."
+        "MIDI connection open, reading input from '{port_name}'..."
     ));
 
     // Hold the connection open for the life of the task

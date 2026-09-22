@@ -1,13 +1,15 @@
 mod audio;
+mod controls;
+mod display;
 mod log;
 mod midi;
-mod ui;
 mod utils;
 
 use crate::{
     audio::audio_handler,
+    controls::control_handler,
+    display::display_handler,
     midi::{midi_input_task, tasks::midi_buffer_handler},
-    ui::UI,
 };
 use static_cell::StaticCell;
 use std::{cell::RefCell, sync::Mutex};
@@ -23,12 +25,7 @@ async fn main() {
     tokio::spawn(audio_handler(engine));
     tokio::spawn(midi_input_task());
     tokio::spawn(midi_buffer_handler(engine));
+    tokio::spawn(control_handler());
 
-    tokio::task::spawn_blocking(move || {
-        let mut ui = UI::new(engine);
-        ratatui::run(|terminal| ui.run(terminal))
-    })
-    .await
-    .unwrap()
-    .unwrap();
+    display_handler(engine).await;
 }

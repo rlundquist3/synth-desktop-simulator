@@ -10,8 +10,12 @@ fn logs() -> &'static Mutex<VecDeque<String>> {
 }
 
 pub fn push(message: impl Into<String>) {
+    let message = message.into();
+
+    eprintln!("{message}");
+
     let mut logs = logs().lock().unwrap();
-    logs.push_back(message.into());
+    logs.push_back(message);
     if logs.len() > MAX_LOG_LINES {
         logs.pop_front();
     }

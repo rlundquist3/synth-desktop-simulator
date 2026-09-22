@@ -6,9 +6,10 @@ edition = "2024"
 [dependencies]
 cpal = "0.18.2"
 crossterm = "0.29.0"
+embedded-graphics = "0.8.2"
+embedded-graphics-simulator = "0.8.0"
 midir = "0.11.0"
 rand = "0.10.2"
-ratatui = "0.30.2"
 rustfft = "6.4.1"
 static_cell = "2.1.1"
 synth-core = { path = "../hardware-synth/synth-core" }
