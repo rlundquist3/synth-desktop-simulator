@@ -25,7 +25,7 @@ async fn main() {
     tokio::spawn(audio_handler(engine));
     tokio::spawn(midi_input_task());
     tokio::spawn(midi_buffer_handler(engine));
-    tokio::spawn(control_handler());
+    tokio::spawn(control_handler(engine));
 
     display_handler(engine).await;
 }

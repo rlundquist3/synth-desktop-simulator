@@ -6,7 +6,10 @@ use embedded_graphics::{
     text::{Alignment, Text},
 };
 use std::{cell::RefCell, sync::Mutex};
-use synth_core::{engines::fm::FMSynth, parameter::UserParameters};
+use synth_core::{
+    engines::fm::{FMSynth, MOD_INDEX_RENDER},
+    parameter::UserParameters,
+};
 
 use crate::display::{Display, DisplayError};
 
@@ -18,7 +21,7 @@ pub async fn render_engine_main(
 
     let c;
     let m;
-    let _i;
+    let i;
     {
         let e = engine.lock().unwrap();
         let engine = e.borrow();
@@ -26,11 +29,11 @@ pub async fn render_engine_main(
         let params = engine.get_parameters();
         c = params[0].get_value();
         m = params[1].get_value();
-        _i = params[2].get_value();
+        i = params[2].get_value();
     }
 
     Text::with_alignment(
-        &format!("{:?}", c),
+        &format!("{:0}", c),
         Point { x: 32, y: 28 },
         ratio_text_style,
         Alignment::Center,
@@ -40,14 +43,14 @@ pub async fn render_engine_main(
         .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
         .draw(display)?;
     Text::with_alignment(
-        &format!("{:?}", m),
+        &format!("{:0}", m),
         Point { x: 32, y: 44 },
         ratio_text_style,
         Alignment::Center,
     )
     .draw(display)?;
     Text::with_alignment(
-        &format!("pi"),
+        MOD_INDEX_RENDER[i as usize],
         Point { x: 80, y: 36 },
         ratio_text_style,
         Alignment::Center,

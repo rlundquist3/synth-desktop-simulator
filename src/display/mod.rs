@@ -96,8 +96,10 @@ pub async fn display_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
         for event in window.events() {
             match event {
                 SimulatorEvent::Quit => return,
-                SimulatorEvent::KeyDown { keycode, .. } => {
-                    if let Some(navigation_event) = navigation_event_for_key(keycode) {
+                SimulatorEvent::KeyDown {
+                    keycode, keymod, ..
+                } => {
+                    if let Some(navigation_event) = navigation_event_for_key(keycode, keymod) {
                         // Stands in for the hardware's encoder interrupts
                         if CONTROL_BUFFER.try_send(navigation_event).is_err() {
                             log::push("Control buffer full");

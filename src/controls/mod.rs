@@ -1,4 +1,4 @@
-use embedded_graphics_simulator::sdl2::Keycode;
+use embedded_graphics_simulator::sdl2::{Keycode, Mod};
 use std::{
     cell::RefCell,
     sync::{LazyLock, Mutex},
@@ -17,8 +17,13 @@ use tokio::sync::{
 
 use crate::{
     controls::{
+        ControlEvent::{
+            Encoder1Click, Encoder1Clockwise, Encoder1Counterclockwise, Encoder2Click,
+            Encoder2Clockwise, Encoder2Counterclockwise, Encoder3Click, Encoder3Clockwise,
+            Encoder3Counterclockwise, Encoder4Click, Encoder4Clockwise, Encoder4Counterclockwise,
+            NavigationDown, NavigationEnter, NavigationLeft, NavigationRight, NavigationUp,
+        },
         EncoderEvent::{Click, Clockwise, Counterclockwise},
-        NavigationEvent::{Down, Enter, Left, Right, Up},
     },
     log,
 };
@@ -58,12 +63,24 @@ impl ModeWatch {
 pub static MODE: LazyLock<ModeWatch> = LazyLock::new(ModeWatch::new);
 
 #[derive(Debug)]
-pub enum NavigationEvent {
-    Up,
-    Down,
-    Left,
-    Right,
-    Enter,
+pub enum ControlEvent {
+    NavigationUp,
+    NavigationDown,
+    NavigationLeft,
+    NavigationRight,
+    NavigationEnter,
+    Encoder1Clockwise,
+    Encoder1Counterclockwise,
+    Encoder1Click,
+    Encoder2Clockwise,
+    Encoder2Counterclockwise,
+    Encoder2Click,
+    Encoder3Clockwise,
+    Encoder3Counterclockwise,
+    Encoder3Click,
+    Encoder4Clockwise,
+    Encoder4Counterclockwise,
+    Encoder4Click,
 }
 
 #[derive(Debug)]
@@ -74,8 +91,8 @@ pub enum EncoderEvent {
 }
 
 pub struct ControlBuffer {
-    sender: Sender<NavigationEvent>,
-    receiver: Mutex<Option<Receiver<NavigationEvent>>>,
+    sender: Sender<ControlEvent>,
+    receiver: Mutex<Option<Receiver<ControlEvent>>>,
 }
 
 impl ControlBuffer {
@@ -87,11 +104,11 @@ impl ControlBuffer {
         }
     }
 
-    pub fn try_send(&self, event: NavigationEvent) -> Result<(), TrySendError<NavigationEvent>> {
+    pub fn try_send(&self, event: ControlEvent) -> Result<(), TrySendError<ControlEvent>> {
         self.sender.try_send(event)
     }
 
-    pub fn receiver(&self) -> Receiver<NavigationEvent> {
+    pub fn receiver(&self) -> Receiver<ControlEvent> {
         self.receiver
             .lock()
             .unwrap()
@@ -102,19 +119,56 @@ impl ControlBuffer {
 
 pub static CONTROL_BUFFER: LazyLock<ControlBuffer> = LazyLock::new(ControlBuffer::new);
 
-pub fn navigation_event_for_key(keycode: Keycode) -> Option<NavigationEvent> {
+pub fn navigation_event_for_key(keycode: Keycode, keymod: Mod) -> Option<ControlEvent> {
     match keycode {
-        Keycode::Up => Some(Up),
-        Keycode::Down => Some(Down),
-        Keycode::Left => Some(Left),
-        Keycode::Right => Some(Right),
-        Keycode::Return => Some(Enter),
+        Keycode::Up => Some(NavigationUp),
+        Keycode::Down => Some(NavigationDown),
+        Keycode::Left => Some(NavigationLeft),
+        Keycode::Right => Some(NavigationRight),
+        Keycode::Return => Some(NavigationEnter),
+        Keycode::NUM_1 => {
+            if keymod.contains(Mod::LSHIFTMOD) || keymod.contains(Mod::RSHIFTMOD) {
+                return Some(Encoder1Counterclockwise);
+            }
+            if keymod.contains(Mod::LCTRLMOD) || keymod.contains(Mod::RCTRLMOD) {
+                return Some(Encoder1Click);
+            }
+            Some(Encoder1Clockwise)
+        }
+        Keycode::NUM_2 => {
+            if keymod.contains(Mod::LSHIFTMOD) || keymod.contains(Mod::RSHIFTMOD) {
+                return Some(Encoder2Counterclockwise);
+            }
+            if keymod.contains(Mod::LCTRLMOD) || keymod.contains(Mod::RCTRLMOD) {
+                return Some(Encoder2Click);
+            }
+            Some(Encoder2Clockwise)
+        }
+        Keycode::NUM_3 => {
+            if keymod.contains(Mod::LSHIFTMOD) || keymod.contains(Mod::RSHIFTMOD) {
+                return Some(Encoder3Counterclockwise);
+            }
+            if keymod.contains(Mod::LCTRLMOD) || keymod.contains(Mod::RCTRLMOD) {
+                return Some(Encoder3Click);
+            }
+            Some(Encoder3Clockwise)
+        }
+        Keycode::NUM_4 => {
+            if keymod.contains(Mod::LSHIFTMOD) || keymod.contains(Mod::RSHIFTMOD) {
+                return Some(Encoder4Counterclockwise);
+            }
+            if keymod.contains(Mod::LCTRLMOD) || keymod.contains(Mod::RCTRLMOD) {
+                return Some(Encoder4Click);
+            }
+            Some(Encoder4Clockwise)
+        }
         _ => None,
     }
 }
 
-pub async fn control_handler() {
+pub async fn control_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
     let mut control_rx = CONTROL_BUFFER.receiver();
+    let mode_rx = MODE.receiver();
 
     loop {
         let Some(event) = control_rx.recv().await else {
@@ -122,36 +176,37 @@ pub async fn control_handler() {
             return;
         };
 
-        match event {
-            Up => log::push("Navigation: Up"),
-            Down => log::push("Navigation: Down"),
-            Left => log::push("Navigation: Left"),
-            Right => log::push("Navigation: Right"),
-            Enter => log::push("Navigation: Enter"),
+        log::push(&format!("Control event: {:?}", event));
+
+        let mode = mode_rx.borrow().clone();
+        match mode {
+            Mode::EngineMain => engine_main_handler(engine, event).await,
+            Mode::EngineEnvelope => {}
+            Mode::EngineLFO => {}
+            Mode::FiltersMain => {}
+            Mode::FilterDetail => {}
+            Mode::EffectsMain => {}
+            Mode::EffectsDetail => {}
         }
     }
 }
 
 pub async fn engine_main_handler(
     engine: &'static Mutex<RefCell<FMSynth>>,
-    encoder_index: usize,
-    encoder_event: EncoderEvent,
+    control_event: ControlEvent,
 ) {
-    log::push(format!(
-        "EngineMain: encoder {:?} {:?}",
-        encoder_index, encoder_event
-    ));
+    if let Some((encoder_index, change)) = match control_event {
+        Encoder1Clockwise => Some((0, Increment)),
+        Encoder1Counterclockwise => Some((0, Decrement)),
+        Encoder2Clockwise => Some((1, Increment)),
+        Encoder2Counterclockwise => Some((1, Decrement)),
+        Encoder3Clockwise => Some((2, Increment)),
+        Encoder3Counterclockwise => Some((2, Decrement)),
+        _ => None,
+    } {
+        let e = engine.lock().unwrap();
+        let mut engine = e.borrow_mut();
 
-    let e = engine.lock().unwrap();
-    let mut engine = e.borrow_mut();
-
-    let change = match encoder_event {
-        Clockwise => Some(Increment),
-        Counterclockwise => Some(Decrement),
-        Click => None,
-    };
-
-    if let Some(change) = change {
         engine.update_parameter(encoder_index, change);
-    }
+    };
 }
