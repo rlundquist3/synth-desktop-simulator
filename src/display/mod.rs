@@ -18,7 +18,7 @@ use crate::{
         },
         navigation_event_for_key,
     },
-    display::fm::render_engine_main,
+    display::fm::{render_engine_envelope, render_engine_lfo, render_engine_main},
     log,
 };
 
@@ -82,9 +82,9 @@ pub async fn display_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
 
         let mode = mode_rx.borrow().clone();
         match mode {
-            EngineMain => render_engine_main(&mut display, engine).await.unwrap(),
-            EngineEnvelope => {}
-            EngineLFO => {}
+            EngineMain => render_engine_main(&mut display, engine).unwrap(),
+            EngineLFO => render_engine_lfo(&mut display, engine).unwrap(),
+            EngineEnvelope => render_engine_envelope(&mut display, engine).unwrap(),
             FiltersMain => {}
             FilterDetail => {}
             EffectsMain => {}

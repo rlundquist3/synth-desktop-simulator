@@ -6,6 +6,7 @@ use std::{
 use synth_core::{
     engines::fm::FMSynth,
     parameter::{
+        self,
         ParameterChange::{Decrement, Increment},
         UserParameters,
     },
@@ -16,13 +17,11 @@ use tokio::sync::{
 };
 
 use crate::{
-    controls::{
-        ControlEvent::{
-            Encoder1Click, Encoder1Clockwise, Encoder1Counterclockwise, Encoder2Click,
-            Encoder2Clockwise, Encoder2Counterclockwise, Encoder3Click, Encoder3Clockwise,
-            Encoder3Counterclockwise, Encoder4Click, Encoder4Clockwise, Encoder4Counterclockwise,
-            NavigationDown, NavigationEnter, NavigationLeft, NavigationRight, NavigationUp,
-        },
+    controls::ControlEvent::{
+        Encoder1Click, Encoder1Clockwise, Encoder1Counterclockwise, Encoder2Click,
+        Encoder2Clockwise, Encoder2Counterclockwise, Encoder3Click, Encoder3Clockwise,
+        Encoder3Counterclockwise, Encoder4Click, Encoder4Clockwise, Encoder4Counterclockwise,
+        NavigationDown, NavigationEnter, NavigationLeft, NavigationRight, NavigationUp,
     },
     log,
 };
@@ -32,8 +31,8 @@ const CONTROL_BUFFER_SIZE: usize = 16;
 #[derive(Clone, Debug)]
 pub enum Mode {
     EngineMain,
-    EngineEnvelope,
     EngineLFO,
+    EngineEnvelope,
     FiltersMain,
     FilterDetail,
     EffectsMain,
@@ -173,8 +172,8 @@ pub async fn control_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
         let mode = mode_rx.borrow().clone();
         match mode {
             Mode::EngineMain => engine_main_handler(engine, event).await,
-            Mode::EngineEnvelope => {}
-            Mode::EngineLFO => {}
+            Mode::EngineLFO => engine_lfo_handler(engine, event).await,
+            Mode::EngineEnvelope => engine_envelope_handler(engine, event).await,
             Mode::FiltersMain => {}
             Mode::FilterDetail => {}
             Mode::EffectsMain => {}
@@ -183,11 +182,20 @@ pub async fn control_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
     }
 }
 
-pub async fn engine_main_handler(
+async fn engine_main_handler(
     engine: &'static Mutex<RefCell<FMSynth>>,
     control_event: ControlEvent,
 ) {
-    if let Some((encoder_index, change)) = match control_event {
+    let mode_sender = MODE.sender();
+    match control_event {
+        NavigationRight => {
+            mode_sender.send(Mode::EngineLFO);
+            return;
+        }
+        _ => {}
+    }
+
+    if let Some((param_index, change)) = match control_event {
         Encoder1Clockwise => Some((0, Increment)),
         Encoder1Counterclockwise => Some((0, Decrement)),
         Encoder2Clockwise => Some((1, Increment)),
@@ -199,6 +207,69 @@ pub async fn engine_main_handler(
         let e = engine.lock().unwrap();
         let mut engine = e.borrow_mut();
 
-        engine.update_parameter(encoder_index, change);
+        engine.update_parameter(param_index, change);
+    };
+}
+
+async fn engine_lfo_handler(engine: &'static Mutex<RefCell<FMSynth>>, control_event: ControlEvent) {
+    let mode_sender = MODE.sender();
+    match control_event {
+        NavigationLeft => {
+            mode_sender.send(Mode::EngineMain);
+            return;
+        }
+        NavigationRight => {
+            mode_sender.send(Mode::EngineEnvelope);
+            return;
+        }
+        _ => {}
+    }
+
+    if let Some((param_index, change)) = match control_event {
+        Encoder1Clockwise => Some((3, Increment)),
+        Encoder1Counterclockwise => Some((3, Decrement)),
+        Encoder2Clockwise => Some((4, Increment)),
+        Encoder2Counterclockwise => Some((4, Decrement)),
+        _ => None,
+    } {
+        let e = engine.lock().unwrap();
+        let mut engine = e.borrow_mut();
+
+        engine.update_parameter(param_index, change);
+    };
+}
+
+async fn engine_envelope_handler(
+    engine: &'static Mutex<RefCell<FMSynth>>,
+    control_event: ControlEvent,
+) {
+    let mode_sender = MODE.sender();
+    match control_event {
+        NavigationLeft => {
+            mode_sender.send(Mode::EngineLFO);
+            return;
+        }
+        NavigationRight => {
+            mode_sender.send(Mode::FiltersMain);
+            return;
+        }
+        _ => {}
+    }
+
+    if let Some((param_index, change)) = match control_event {
+        Encoder1Clockwise => Some((5, Increment)),
+        Encoder1Counterclockwise => Some((5, Decrement)),
+        Encoder2Clockwise => Some((6, Increment)),
+        Encoder2Counterclockwise => Some((6, Decrement)),
+        Encoder3Clockwise => Some((7, Increment)),
+        Encoder3Counterclockwise => Some((7, Decrement)),
+        Encoder4Clockwise => Some((8, Decrement)),
+        Encoder4Counterclockwise => Some((8, Increment)),
+        _ => None,
+    } {
+        let e = engine.lock().unwrap();
+        let mut engine = e.borrow_mut();
+
+        engine.update_parameter(param_index, change);
     };
 }
