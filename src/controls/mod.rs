@@ -23,7 +23,6 @@ use crate::{
             Encoder3Counterclockwise, Encoder4Click, Encoder4Clockwise, Encoder4Counterclockwise,
             NavigationDown, NavigationEnter, NavigationLeft, NavigationRight, NavigationUp,
         },
-        EncoderEvent::{Click, Clockwise, Counterclockwise},
     },
     log,
 };
@@ -81,13 +80,6 @@ pub enum ControlEvent {
     Encoder4Clockwise,
     Encoder4Counterclockwise,
     Encoder4Click,
-}
-
-#[derive(Debug)]
-pub enum EncoderEvent {
-    Clockwise,
-    Counterclockwise,
-    Click,
 }
 
 pub struct ControlBuffer {

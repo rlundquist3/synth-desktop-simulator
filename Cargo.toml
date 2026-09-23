@@ -8,9 +8,12 @@ cpal = "0.18.2"
 crossterm = "0.29.0"
 embedded-graphics = "0.8.2"
 embedded-graphics-simulator = "0.8.0"
+embedded-layout = "0.4.2"
+heapless = "0.9.3"
 midir = "0.11.0"
 rand = "0.10.2"
 rustfft = "6.4.1"
 static_cell = "2.1.1"
 synth-core = { path = "../hardware-synth/synth-core" }
+synth-gui = { path = "../hardware-synth/synth-gui" }
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "sync"] }
