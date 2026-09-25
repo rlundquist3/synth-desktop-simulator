@@ -10,6 +10,7 @@ use synth_core::engines::fm::FMSynth;
 use tokio::sync::mpsc::{self, Receiver, Sender, error::TrySendError};
 
 use crate::{
+    SharedChain,
     controls::{
         CONTROL_BUFFER, MODE,
         Mode::{
@@ -63,7 +64,7 @@ impl DisplayBuffer {
 
 pub static DISPLAY_BUFFER: LazyLock<DisplayBuffer> = LazyLock::new(DisplayBuffer::new);
 
-pub async fn display_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
+pub async fn display_handler(chain: &'static SharedChain) {
     let mut display = SimulatorDisplay::<BinaryColor>::new(DISPLAY_SIZE);
     let output_settings = OutputSettingsBuilder::new()
         .theme(BinaryColorTheme::OledWhite)
@@ -82,9 +83,9 @@ pub async fn display_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
 
         let mode = mode_rx.borrow().clone();
         match mode {
-            EngineMain => render_engine_main(&mut display, engine).unwrap(),
-            EngineLFO => render_engine_lfo(&mut display, engine).unwrap(),
-            EngineEnvelope => render_engine_envelope(&mut display, engine).unwrap(),
+            EngineMain => render_engine_main(&mut display, chain).unwrap(),
+            EngineLFO => render_engine_lfo(&mut display, chain).unwrap(),
+            EngineEnvelope => render_engine_envelope(&mut display, chain).unwrap(),
             FiltersMain => {}
             FilterDetail => {}
             EffectsMain => {}

@@ -3,11 +3,11 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use std::{cell::RefCell, sync::Mutex};
-use synth_core::{SAMPLE_RATE, engines::fm::FMSynth};
+use synth_core::{SAMPLE_RATE, chain::Chain, engines::fm::FMSynth};
 
-use crate::log;
+use crate::{SharedChain, log};
 
-pub async fn audio_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
+pub async fn audio_handler(chain: &'static SharedChain) {
     let device = cpal::default_host()
         .default_output_device()
         .expect("Should find default audio device");
@@ -22,8 +22,8 @@ pub async fn audio_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
         .build_output_stream(
             config,
             move |output: &mut [f32], _| {
-                let e = engine.lock().unwrap();
-                audio_output(&mut e.borrow_mut(), output, config.channels as usize);
+                let c = chain.lock().unwrap();
+                audio_output(&mut c.borrow_mut(), output, config.channels as usize);
             },
             |err| log::push(format!("audio stream error: {err}")),
             None,
@@ -39,8 +39,8 @@ pub async fn audio_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
     std::future::pending::<()>().await;
 }
 
-fn audio_output(engine: &mut FMSynth, output: &mut [f32], channels: usize) {
+fn audio_output(chain: &mut Chain, output: &mut [f32], channels: usize) {
     output.chunks_mut(channels).for_each(|frame| {
-        frame.fill(engine.next().unwrap_or(0.0));
+        frame.fill(chain.next().unwrap_or(0.0));
     });
 }

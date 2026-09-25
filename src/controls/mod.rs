@@ -17,6 +17,7 @@ use tokio::sync::{
 };
 
 use crate::{
+    SharedChain,
     controls::ControlEvent::{
         Encoder1Click, Encoder1Clockwise, Encoder1Counterclockwise, Encoder2Click,
         Encoder2Clockwise, Encoder2Counterclockwise, Encoder3Click, Encoder3Clockwise,
@@ -157,7 +158,7 @@ pub fn navigation_event_for_key(keycode: Keycode, keymod: Mod) -> Option<Control
     }
 }
 
-pub async fn control_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
+pub async fn control_handler(chain: &'static SharedChain) {
     let mut control_rx = CONTROL_BUFFER.receiver();
     let mode_rx = MODE.receiver();
 
@@ -171,9 +172,9 @@ pub async fn control_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
 
         let mode = mode_rx.borrow().clone();
         match mode {
-            Mode::EngineMain => engine_main_handler(engine, event).await,
-            Mode::EngineLFO => engine_lfo_handler(engine, event).await,
-            Mode::EngineEnvelope => engine_envelope_handler(engine, event).await,
+            Mode::EngineMain => engine_main_handler(chain, event).await,
+            Mode::EngineLFO => engine_lfo_handler(chain, event).await,
+            Mode::EngineEnvelope => engine_envelope_handler(chain, event).await,
             Mode::FiltersMain => {}
             Mode::FilterDetail => {}
             Mode::EffectsMain => {}
@@ -182,10 +183,7 @@ pub async fn control_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
     }
 }
 
-async fn engine_main_handler(
-    engine: &'static Mutex<RefCell<FMSynth>>,
-    control_event: ControlEvent,
-) {
+async fn engine_main_handler(chain: &'static SharedChain, control_event: ControlEvent) {
     let mode_sender = MODE.sender();
     match control_event {
         NavigationRight => {
@@ -204,14 +202,14 @@ async fn engine_main_handler(
         Encoder3Counterclockwise => Some((2, Decrement)),
         _ => None,
     } {
-        let e = engine.lock().unwrap();
-        let mut engine = e.borrow_mut();
+        let c = chain.lock().unwrap();
+        let mut chain = c.borrow_mut();
 
-        engine.update_parameter(param_index, change);
+        chain.get_engine().update_parameter(param_index, change);
     };
 }
 
-async fn engine_lfo_handler(engine: &'static Mutex<RefCell<FMSynth>>, control_event: ControlEvent) {
+async fn engine_lfo_handler(chain: &'static SharedChain, control_event: ControlEvent) {
     let mode_sender = MODE.sender();
     match control_event {
         NavigationLeft => {
@@ -232,17 +230,14 @@ async fn engine_lfo_handler(engine: &'static Mutex<RefCell<FMSynth>>, control_ev
         Encoder2Counterclockwise => Some((4, Decrement)),
         _ => None,
     } {
-        let e = engine.lock().unwrap();
-        let mut engine = e.borrow_mut();
+        let c = chain.lock().unwrap();
+        let mut chain = c.borrow_mut();
 
-        engine.update_parameter(param_index, change);
+        chain.get_engine().update_parameter(param_index, change);
     };
 }
 
-async fn engine_envelope_handler(
-    engine: &'static Mutex<RefCell<FMSynth>>,
-    control_event: ControlEvent,
-) {
+async fn engine_envelope_handler(chain: &'static SharedChain, control_event: ControlEvent) {
     let mode_sender = MODE.sender();
     match control_event {
         NavigationLeft => {
@@ -267,9 +262,9 @@ async fn engine_envelope_handler(
         Encoder4Counterclockwise => Some((8, Increment)),
         _ => None,
     } {
-        let e = engine.lock().unwrap();
-        let mut engine = e.borrow_mut();
+        let c = chain.lock().unwrap();
+        let mut chain = c.borrow_mut();
 
-        engine.update_parameter(param_index, change);
+        chain.get_engine().update_parameter(param_index, change);
     };
 }

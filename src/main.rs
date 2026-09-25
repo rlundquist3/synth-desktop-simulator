@@ -13,19 +13,22 @@ use crate::{
 };
 use static_cell::StaticCell;
 use std::{cell::RefCell, sync::Mutex};
-use synth_core::engines::fm::FMSynth;
+use synth_core::{chain::Chain, engines::fm::FMSynth};
 
-pub static ENGINE: StaticCell<Mutex<RefCell<FMSynth>>> = StaticCell::new();
+pub type SharedChain = Mutex<RefCell<Chain>>;
+
+pub static CHAIN: StaticCell<SharedChain> = StaticCell::new();
 
 #[tokio::main]
 async fn main() {
-    let engine: &'static Mutex<RefCell<FMSynth>> =
-        ENGINE.init(Mutex::new(RefCell::new(FMSynth::new())));
+    let chain: &'static SharedChain = CHAIN.init(Mutex::new(RefCell::new(Chain::new(Box::new(
+        FMSynth::new(),
+    )))));
 
-    tokio::spawn(audio_handler(engine));
+    tokio::spawn(audio_handler(chain));
     tokio::spawn(midi_input_task());
-    tokio::spawn(midi_buffer_handler(engine));
-    tokio::spawn(control_handler(engine));
+    tokio::spawn(midi_buffer_handler(chain));
+    tokio::spawn(control_handler(chain));
 
-    display_handler(engine).await;
+    display_handler(chain).await;
 }

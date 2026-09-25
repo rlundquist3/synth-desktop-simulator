@@ -5,9 +5,9 @@ use synth_core::{
     voices::Voice,
 };
 
-use crate::{log, midi::MIDI_BUFFER};
+use crate::{SharedChain, log, midi::MIDI_BUFFER};
 
-pub async fn midi_buffer_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
+pub async fn midi_buffer_handler(chain: &'static SharedChain) {
     let mut receiver = MIDI_BUFFER.receiver();
 
     loop {
@@ -17,44 +17,42 @@ pub async fn midi_buffer_handler(engine: &'static Mutex<RefCell<FMSynth>>) {
         };
 
         match message.0 {
-            128 => handle_note_off(engine, message).await,
+            128 => handle_note_off(chain, message).await,
             144 => match message.2 {
-                0 => handle_note_off(engine, message).await,
-                _ => handle_note_on(engine, message).await,
+                0 => handle_note_off(chain, message).await,
+                _ => handle_note_on(chain, message).await,
             },
-            224 => handle_pitch_bend(engine, get_pitch_bend_value(message)).await,
+            224 => handle_pitch_bend(chain, get_pitch_bend_value(message)).await,
             _ => log::push(format!("unsupported status {message:?}")),
         };
     }
 }
 
-async fn handle_note_on(engine: &'static Mutex<RefCell<FMSynth>>, message: MidiMessage) {
+async fn handle_note_on(chain: &'static SharedChain, message: MidiMessage) {
     log::push(format!("note on {message:?}"));
 
     let MidiMessage(_status, note, _vel) = message;
 
-    let e = engine.lock().unwrap();
-    let mut engine = e.borrow_mut();
+    let c = chain.lock().unwrap();
+    let mut chain = c.borrow_mut();
 
-    let voice = engine.voices.voice_on(note);
-    voice.set_freq(MIDI_NOTE_FREQS[note as usize], note as usize);
-    voice.on.store(true, Ordering::Relaxed);
+    chain.get_engine().note_on(note);
 }
 
-async fn handle_note_off(engine: &'static Mutex<RefCell<FMSynth>>, message: MidiMessage) {
+async fn handle_note_off(chain: &'static SharedChain, message: MidiMessage) {
     log::push(format!("note off {message:?}"));
 
     let MidiMessage(_status, note, _vel) = message;
 
-    let e = engine.lock().unwrap();
-    let mut engine = e.borrow_mut();
-    if let Some(voice) = engine.voices.voice_off(note) {
-        voice.on.store(false, Ordering::Relaxed);
-    }
+    let c = chain.lock().unwrap();
+    let mut chain = c.borrow_mut();
+
+    chain.get_engine().note_off(note);
 }
 
-async fn handle_pitch_bend(engine: &'static Mutex<RefCell<FMSynth>>, bend: u16) {
-    let e = engine.lock().unwrap();
-    let mut engine = e.borrow_mut();
-    engine.set_pitch_bend(bend);
+async fn handle_pitch_bend(chain: &'static SharedChain, bend: u16) {
+    let c = chain.lock().unwrap();
+    let mut chain = c.borrow_mut();
+
+    chain.get_engine().set_pitch_bend(bend);
 }
