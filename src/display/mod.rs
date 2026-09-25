@@ -19,10 +19,14 @@ use crate::{
         },
         navigation_event_for_key,
     },
-    display::fm::{render_engine_envelope, render_engine_lfo, render_engine_main},
+    display::{
+        filters::render_filters_main,
+        fm::{render_engine_envelope, render_engine_lfo, render_engine_main},
+    },
     log,
 };
 
+mod filters;
 mod fm;
 
 pub type Display = SimulatorDisplay<BinaryColor>;
@@ -82,11 +86,12 @@ pub async fn display_handler(chain: &'static SharedChain) {
         display.clear(BinaryColor::Off).unwrap();
 
         let mode = mode_rx.borrow().clone();
+
         match mode {
             EngineMain => render_engine_main(&mut display, chain).unwrap(),
             EngineLFO => render_engine_lfo(&mut display, chain).unwrap(),
             EngineEnvelope => render_engine_envelope(&mut display, chain).unwrap(),
-            FiltersMain => {}
+            FiltersMain => render_filters_main(&mut display, chain).unwrap(),
             FilterDetail => {}
             EffectsMain => {}
             EffectsDetail => {}

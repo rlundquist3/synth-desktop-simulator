@@ -61,6 +61,27 @@ impl ModeWatch {
 
 pub static MODE: LazyLock<ModeWatch> = LazyLock::new(ModeWatch::new);
 
+pub struct NavigationWatch {
+    sender: watch::Sender<usize>,
+}
+
+impl NavigationWatch {
+    fn new() -> Self {
+        let (sender, _) = watch::channel(0);
+        NavigationWatch { sender }
+    }
+
+    pub fn receiver(&self) -> watch::Receiver<usize> {
+        self.sender.subscribe()
+    }
+
+    pub fn sender(&self) -> &watch::Sender<usize> {
+        &self.sender
+    }
+}
+
+pub static NAVIGATION_LOCATION: LazyLock<NavigationWatch> = LazyLock::new(NavigationWatch::new);
+
 #[derive(Debug)]
 pub enum ControlEvent {
     NavigationUp,
@@ -175,7 +196,7 @@ pub async fn control_handler(chain: &'static SharedChain) {
             Mode::EngineMain => engine_main_handler(chain, event).await,
             Mode::EngineLFO => engine_lfo_handler(chain, event).await,
             Mode::EngineEnvelope => engine_envelope_handler(chain, event).await,
-            Mode::FiltersMain => {}
+            Mode::FiltersMain => filters_main_handler(chain, event).await,
             Mode::FilterDetail => {}
             Mode::EffectsMain => {}
             Mode::EffectsDetail => {}
@@ -184,10 +205,10 @@ pub async fn control_handler(chain: &'static SharedChain) {
 }
 
 async fn engine_main_handler(chain: &'static SharedChain, control_event: ControlEvent) {
-    let mode_sender = MODE.sender();
+    let mode_tx = MODE.sender();
     match control_event {
         NavigationRight => {
-            mode_sender.send(Mode::EngineLFO);
+            mode_tx.send(Mode::EngineLFO);
             return;
         }
         _ => {}
@@ -210,14 +231,14 @@ async fn engine_main_handler(chain: &'static SharedChain, control_event: Control
 }
 
 async fn engine_lfo_handler(chain: &'static SharedChain, control_event: ControlEvent) {
-    let mode_sender = MODE.sender();
+    let mode_tx = MODE.sender();
     match control_event {
         NavigationLeft => {
-            mode_sender.send(Mode::EngineMain);
+            mode_tx.send(Mode::EngineMain);
             return;
         }
         NavigationRight => {
-            mode_sender.send(Mode::EngineEnvelope);
+            mode_tx.send(Mode::EngineEnvelope);
             return;
         }
         _ => {}
@@ -238,14 +259,14 @@ async fn engine_lfo_handler(chain: &'static SharedChain, control_event: ControlE
 }
 
 async fn engine_envelope_handler(chain: &'static SharedChain, control_event: ControlEvent) {
-    let mode_sender = MODE.sender();
+    let mode_tx = MODE.sender();
     match control_event {
         NavigationLeft => {
-            mode_sender.send(Mode::EngineLFO);
+            mode_tx.send(Mode::EngineLFO);
             return;
         }
         NavigationRight => {
-            mode_sender.send(Mode::FiltersMain);
+            mode_tx.send(Mode::FiltersMain);
             return;
         }
         _ => {}
@@ -267,4 +288,53 @@ async fn engine_envelope_handler(chain: &'static SharedChain, control_event: Con
 
         chain.get_engine().update_parameter(param_index, change);
     };
+}
+
+async fn filters_main_handler(chain: &'static SharedChain, control_event: ControlEvent) {
+    let mode_tx = MODE.sender();
+    let navigation_tx = NAVIGATION_LOCATION.sender();
+    let navigation_rx = NAVIGATION_LOCATION.receiver();
+
+    let navigation_location = navigation_rx.borrow().clone();
+    match navigation_location {
+        0 => match control_event {
+            NavigationLeft => {
+                mode_tx.send(Mode::EngineEnvelope);
+                return;
+            }
+            NavigationRight => {
+                mode_tx.send(Mode::EffectsMain);
+                return;
+            }
+            NavigationUp => {
+                navigation_tx.send(1);
+                return;
+            }
+            _ => {}
+        },
+        _ => match control_event {
+            NavigationLeft => {
+                match navigation_location {
+                    1 => {}
+                    _ => {
+                        navigation_tx.send(navigation_location - 1);
+                    }
+                };
+                return;
+            }
+            NavigationRight => {
+                navigation_tx.send(navigation_location + 1);
+                return;
+            }
+            NavigationDown => {
+                navigation_tx.send(0);
+                return;
+            }
+            NavigationEnter => {
+                mode_tx.send(Mode::FilterDetail);
+                return;
+            }
+            _ => {}
+        },
+    }
 }
