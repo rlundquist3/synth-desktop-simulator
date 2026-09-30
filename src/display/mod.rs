@@ -14,13 +14,13 @@ use crate::{
     controls::{
         CONTROL_BUFFER, MODE,
         Mode::{
-            EffectsDetail, EffectsMain, EngineEnvelope, EngineLFO, EngineMain, FilterDetail,
+            EffectsDetail, EffectsMain, EngineEnvelope, EngineLFO, EngineMain, FiltersDetail,
             FiltersMain,
         },
         navigation_event_for_key,
     },
     display::{
-        filters::render_filters_main,
+        filters::{render_filters_detail, render_filters_main},
         fm::{render_engine_envelope, render_engine_lfo, render_engine_main},
     },
     log,
@@ -92,7 +92,7 @@ pub async fn display_handler(chain: &'static SharedChain) {
             EngineLFO => render_engine_lfo(&mut display, chain).unwrap(),
             EngineEnvelope => render_engine_envelope(&mut display, chain).unwrap(),
             FiltersMain => render_filters_main(&mut display, chain).unwrap(),
-            FilterDetail => {}
+            FiltersDetail => render_filters_detail(&mut display, chain).unwrap(),
             EffectsMain => {}
             EffectsDetail => {}
         }

@@ -4,6 +4,7 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 use synth_core::{
+    effects::filters::FILTER_COUNT,
     engines::fm::FMSynth,
     parameter::{
         self,
@@ -35,7 +36,7 @@ pub enum Mode {
     EngineLFO,
     EngineEnvelope,
     FiltersMain,
-    FilterDetail,
+    FiltersDetail,
     EffectsMain,
     EffectsDetail,
 }
@@ -197,7 +198,7 @@ pub async fn control_handler(chain: &'static SharedChain) {
             Mode::EngineLFO => engine_lfo_handler(chain, event).await,
             Mode::EngineEnvelope => engine_envelope_handler(chain, event).await,
             Mode::FiltersMain => filters_main_handler(chain, event).await,
-            Mode::FilterDetail => {}
+            Mode::FiltersDetail => filters_detail_handler(chain, event).await,
             Mode::EffectsMain => {}
             Mode::EffectsDetail => {}
         }
@@ -323,7 +324,9 @@ async fn filters_main_handler(chain: &'static SharedChain, control_event: Contro
                 return;
             }
             NavigationRight => {
-                navigation_tx.send(navigation_location + 1);
+                if navigation_location < FILTER_COUNT {
+                    navigation_tx.send(navigation_location + 1);
+                }
                 return;
             }
             NavigationDown => {
@@ -331,10 +334,46 @@ async fn filters_main_handler(chain: &'static SharedChain, control_event: Contro
                 return;
             }
             NavigationEnter => {
-                mode_tx.send(Mode::FilterDetail);
+                mode_tx.send(Mode::FiltersDetail);
                 return;
             }
             _ => {}
         },
     }
+}
+
+async fn filters_detail_handler(chain: &'static SharedChain, control_event: ControlEvent) {
+    let mode_tx = MODE.sender();
+    let navigation_tx = NAVIGATION_LOCATION.sender();
+    let navigation_rx = NAVIGATION_LOCATION.receiver();
+
+    let navigation_location = navigation_rx.borrow().clone();
+    match navigation_location {
+        0 => {}
+        _ => match control_event {
+            NavigationEnter => {
+                navigation_tx.send(0);
+                mode_tx.send(Mode::FiltersMain);
+                return;
+            }
+            _ => {}
+        },
+    }
+
+    if let Some((param_index, change)) = match control_event {
+        Encoder1Clockwise => Some((0, Increment)),
+        Encoder1Counterclockwise => Some((0, Decrement)),
+        Encoder2Clockwise => Some((1, Increment)),
+        Encoder2Counterclockwise => Some((1, Decrement)),
+        Encoder3Clockwise => Some((2, Increment)),
+        Encoder3Counterclockwise => Some((2, Decrement)),
+        _ => None,
+    } {
+        let c = chain.lock().unwrap();
+        let mut chain = c.borrow_mut();
+
+        let filter_index = navigation_location - 1;
+
+        chain.get_filters()[filter_index].update_parameter(param_index, change);
+    };
 }
