@@ -12,6 +12,7 @@ use synth_core::{
         UserParameters,
     },
 };
+use synth_gui::effects::effects_main::{EFFECT_CHUNK_COUNT, EFFECT_CHUNK_SIZE};
 use tokio::sync::{
     mpsc::{self, Receiver, Sender, error::TrySendError},
     watch,
@@ -410,16 +411,15 @@ async fn effects_main_handler(chain: &'static SharedChain, control_event: Contro
         },
         _ => match control_event {
             NavigationUp => {
-                match navigation_location {
-                    1 => {}
-                    _ => {
-                        navigation_tx.send(navigation_location - 1);
-                    }
+                if navigation_location % EFFECT_CHUNK_SIZE != 1 {
+                    navigation_tx.send(navigation_location - 1);
                 };
                 return;
             }
             NavigationDown => {
-                if navigation_location < EFFECT_COUNT {
+                if navigation_location % EFFECT_CHUNK_SIZE != 0
+                    && navigation_location < EFFECT_COUNT
+                {
                     navigation_tx.send(navigation_location + 1);
                 } else {
                     navigation_tx.send(0);
@@ -427,7 +427,15 @@ async fn effects_main_handler(chain: &'static SharedChain, control_event: Contro
                 return;
             }
             NavigationLeft => {
-                navigation_tx.send(0);
+                if navigation_location > EFFECT_CHUNK_SIZE {
+                    navigation_tx.send(navigation_location - EFFECT_CHUNK_SIZE);
+                }
+                return;
+            }
+            NavigationRight => {
+                if navigation_location < EFFECT_CHUNK_COUNT * EFFECT_CHUNK_SIZE {
+                    navigation_tx.send(navigation_location + EFFECT_CHUNK_SIZE);
+                }
                 return;
             }
             NavigationEnter => {
