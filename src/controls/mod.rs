@@ -4,7 +4,7 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 use synth_core::{
-    effects::filters::FILTER_COUNT,
+    effects::{EFFECT_COUNT, filters::FILTER_COUNT},
     engines::fm::FMSynth,
     parameter::{
         self,
@@ -199,8 +199,8 @@ pub async fn control_handler(chain: &'static SharedChain) {
             Mode::EngineEnvelope => engine_envelope_handler(chain, event).await,
             Mode::FiltersMain => filters_main_handler(chain, event).await,
             Mode::FiltersDetail => filters_detail_handler(chain, event).await,
-            Mode::EffectsMain => {}
-            Mode::EffectsDetail => {}
+            Mode::EffectsMain => effects_main_handler(chain, event).await,
+            Mode::EffectsDetail => effects_detail_handler(chain, event).await,
         }
     }
 }
@@ -360,13 +360,24 @@ async fn filters_detail_handler(chain: &'static SharedChain, control_event: Cont
         },
     }
 
+    match control_event {
+        Encoder1Click => {
+            let c = chain.lock().unwrap();
+            let mut chain = c.borrow_mut();
+
+            let filter_index = navigation_location - 1;
+
+            chain.get_filters()[filter_index].toggle();
+            return;
+        }
+        _ => {}
+    }
+
     if let Some((param_index, change)) = match control_event {
         Encoder1Clockwise => Some((0, Increment)),
         Encoder1Counterclockwise => Some((0, Decrement)),
         Encoder2Clockwise => Some((1, Increment)),
         Encoder2Counterclockwise => Some((1, Decrement)),
-        Encoder3Clockwise => Some((2, Increment)),
-        Encoder3Counterclockwise => Some((2, Decrement)),
         _ => None,
     } {
         let c = chain.lock().unwrap();
@@ -375,5 +386,106 @@ async fn filters_detail_handler(chain: &'static SharedChain, control_event: Cont
         let filter_index = navigation_location - 1;
 
         chain.get_filters()[filter_index].update_parameter(param_index, change);
+    };
+}
+
+async fn effects_main_handler(chain: &'static SharedChain, control_event: ControlEvent) {
+    let mode_tx = MODE.sender();
+    let navigation_tx = NAVIGATION_LOCATION.sender();
+    let navigation_rx = NAVIGATION_LOCATION.receiver();
+
+    let navigation_location = navigation_rx.borrow().clone();
+    match navigation_location {
+        0 => match control_event {
+            NavigationLeft => {
+                mode_tx.send(Mode::FiltersMain);
+                return;
+            }
+            NavigationRight => {}
+            NavigationUp => {
+                navigation_tx.send(1);
+                return;
+            }
+            _ => {}
+        },
+        _ => match control_event {
+            NavigationUp => {
+                match navigation_location {
+                    1 => {}
+                    _ => {
+                        navigation_tx.send(navigation_location - 1);
+                    }
+                };
+                return;
+            }
+            NavigationDown => {
+                if navigation_location < EFFECT_COUNT {
+                    navigation_tx.send(navigation_location + 1);
+                } else {
+                    navigation_tx.send(0);
+                }
+                return;
+            }
+            NavigationLeft => {
+                navigation_tx.send(0);
+                return;
+            }
+            NavigationEnter => {
+                mode_tx.send(Mode::EffectsDetail);
+                return;
+            }
+            _ => {}
+        },
+    }
+}
+
+async fn effects_detail_handler(chain: &'static SharedChain, control_event: ControlEvent) {
+    let mode_tx = MODE.sender();
+    let navigation_tx = NAVIGATION_LOCATION.sender();
+    let navigation_rx = NAVIGATION_LOCATION.receiver();
+
+    let navigation_location = navigation_rx.borrow().clone();
+    match navigation_location {
+        0 => {}
+        _ => match control_event {
+            NavigationEnter => {
+                navigation_tx.send(0);
+                mode_tx.send(Mode::EffectsMain);
+                return;
+            }
+            _ => {}
+        },
+    }
+
+    match control_event {
+        Encoder1Click => {
+            let c = chain.lock().unwrap();
+            let mut chain = c.borrow_mut();
+
+            let effect_index = navigation_location - 1;
+
+            chain.get_effects()[effect_index].toggle();
+            return;
+        }
+        _ => {}
+    }
+
+    if let Some((param_index, change)) = match control_event {
+        Encoder1Clockwise => Some((0, Increment)),
+        Encoder1Counterclockwise => Some((0, Decrement)),
+        Encoder2Clockwise => Some((1, Increment)),
+        Encoder2Counterclockwise => Some((1, Decrement)),
+        Encoder3Clockwise => Some((2, Increment)),
+        Encoder3Counterclockwise => Some((2, Decrement)),
+        Encoder4Clockwise => Some((3, Increment)),
+        Encoder4Counterclockwise => Some((3, Decrement)),
+        _ => None,
+    } {
+        let c = chain.lock().unwrap();
+        let mut chain = c.borrow_mut();
+
+        let effect_index = navigation_location - 1;
+
+        chain.get_effects()[effect_index].update_parameter(param_index, change);
     };
 }

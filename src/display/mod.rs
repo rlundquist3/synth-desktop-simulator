@@ -20,12 +20,14 @@ use crate::{
         navigation_event_for_key,
     },
     display::{
+        effects::{render_effects_detail, render_effects_main},
         filters::{render_filters_detail, render_filters_main},
         fm::{render_engine_envelope, render_engine_lfo, render_engine_main},
     },
     log,
 };
 
+mod effects;
 mod filters;
 mod fm;
 
@@ -93,8 +95,8 @@ pub async fn display_handler(chain: &'static SharedChain) {
             EngineEnvelope => render_engine_envelope(&mut display, chain).unwrap(),
             FiltersMain => render_filters_main(&mut display, chain).unwrap(),
             FiltersDetail => render_filters_detail(&mut display, chain).unwrap(),
-            EffectsMain => {}
-            EffectsDetail => {}
+            EffectsMain => render_effects_main(&mut display, chain).unwrap(),
+            EffectsDetail => render_effects_detail(&mut display, chain).unwrap(),
         }
 
         window.update(&display);
