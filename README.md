@@ -70,9 +70,13 @@ MIDI connection open, reading input from 'MPK mini IV MIDI Port'...
   | **Enter** | select |
   | **1** | encoder 1 clockwise |
   | **Shift + 1** | encoder 1 counterclockwise |
+  | **Ctrl + 1** | encoder 1 click |
   | **2** | encoder 2 clockwise |
   | **Shift + 2** | encoder 2 counterclockwise |
+  | **Ctrl + 2** | encoder 2 click |
   | **3** | encoder 3 clockwise |
   | **Shift + 3** | encoder 3 counterclockwise |
+  | **Ctrl + 3** | encoder 3 click |
   | **4** | encoder 4 clockwise |
   | **Shift + 4** | encoder 4 counterclockwise |
+  | **Ctrl + 4** | encoder 4 click |
