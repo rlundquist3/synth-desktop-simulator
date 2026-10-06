@@ -37,9 +37,7 @@ pub type DisplayError = <Display as DrawTarget>::Error;
 const DISPLAY_BUFFER_SIZE: usize = 16;
 const DISPLAY_SIZE: Size = Size::new(128, 64);
 
-pub struct DisplayContent {
-    // pub text: String,
-}
+pub struct DisplayContent {}
 
 pub struct DisplayBuffer {
     sender: Sender<DisplayContent>,
