@@ -19,9 +19,9 @@ pub fn render_filters_main(
     let c = chain.lock().unwrap();
     let mut chain = c.borrow_mut();
 
-    let filters = chain.get_filters();
+    let filters_snapshot = chain.get_filters_snapshot();
 
-    FiltersMainLayout::new(filters, display_area, navigation_location).draw(display);
+    FiltersMainLayout::new(filters_snapshot, display_area, navigation_location).draw(display);
 
     Ok(())
 }
@@ -38,9 +38,9 @@ pub fn render_filters_detail(
     let c = chain.lock().unwrap();
     let mut chain = c.borrow_mut();
 
-    let filters = chain.get_filters();
+    let filters_snapshot = chain.get_filters_snapshot();
 
-    FiltersDetailLayout::new(filters, display_area, navigation_location).draw(display);
+    FiltersDetailLayout::new(filters_snapshot, display_area, navigation_location).draw(display);
 
     Ok(())
 }

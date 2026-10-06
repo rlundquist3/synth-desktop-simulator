@@ -1,6 +1,4 @@
 use embedded_graphics::prelude::*;
-use std::{cell::RefCell, sync::Mutex};
-use synth_core::{engines::fm::FMSynth, parameter::UserParameters};
 use synth_gui::{engines::fm::EngineMainLayout, envelope::EnvelopeLayout, lfo::LfoLayout};
 
 use crate::{
@@ -33,7 +31,7 @@ pub fn render_engine_lfo(
     let c = chain.lock().unwrap();
     let mut chain = c.borrow_mut();
 
-    let parameters = chain.get_engine().get_parameters().clone().split_off(3);
+    let parameters = &chain.get_engine().get_parameters()[3..];
 
     LfoLayout::new(parameters, display_area).draw(display)?;
 

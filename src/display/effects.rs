@@ -19,9 +19,9 @@ pub fn render_effects_main(
     let c = chain.lock().unwrap();
     let mut chain = c.borrow_mut();
 
-    let effects = chain.get_effects();
+    let effects_snapshot = chain.get_effects_snapshot();
 
-    EffectsMainLayout::new(effects, display_area, navigation_location).draw(display);
+    EffectsMainLayout::new(effects_snapshot, display_area, navigation_location).draw(display);
 
     Ok(())
 }
@@ -38,9 +38,9 @@ pub fn render_effects_detail(
     let c = chain.lock().unwrap();
     let mut chain = c.borrow_mut();
 
-    let effects = chain.get_effects();
+    let effects_snapshot = chain.get_effects_snapshot();
 
-    EffectsDetailLayout::new(effects, display_area, navigation_location).draw(display);
+    EffectsDetailLayout::new(effects_snapshot, display_area, navigation_location).draw(display);
 
     Ok(())
 }
