@@ -31,7 +31,7 @@ pub fn render_engine_lfo(
     let c = chain.lock().unwrap();
     let mut chain = c.borrow_mut();
 
-    let parameters = &chain.get_engine().get_parameters()[3..];
+    let parameters = &chain.get_engine().get_parameters()[4..];
 
     LfoLayout::new(parameters, display_area).draw(display)?;
 
